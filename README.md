@@ -130,6 +130,9 @@ dependency was updated.
    change because they include the inherited slots. Dependents further down
    are picked up in the next round, so no cascade logic is needed.
 
+To trigger rebuilds right after a breaking change is deployed, rather than
+nightly, see [rebuild-procedure.md](rebuild-procedure.md).
+
 ## Findings
 
 Between the current Bioconductor release and devel (versions bumped many
