@@ -1,18 +1,5 @@
-/* Optional backend for C function signatures, see R/clang.R. Only compiled
- * if configure found libclang. */
+/* Signatures of C functions with libclang, see R/clang.R */
 #include <Rinternals.h>
-
-#ifndef HAVE_LIBCLANG
-
-SEXP abitools_clang_resource_dir(void){
-  return R_NilValue;
-}
-
-SEXP abitools_clang_signatures(SEXP file, SEXP args, SEXP names, SEXP own, SEXP dirs){
-  Rf_error("abitools was built without libclang");
-}
-
-#else
 
 #include <stdlib.h>
 #include <string.h>
@@ -207,6 +194,26 @@ static void describe(buf_t *b, CXType t, state_t *s, int depth){
     put(b, ")");
     return;
   }
+  case CXType_Char_S:
+  case CXType_Char_U:
+    /* Plain char is signed or unsigned depending on the platform */
+    put(b, "Char");
+    return;
+  case CXType_Short:
+  case CXType_Int:
+  case CXType_Long:
+  case CXType_LongLong:
+  case CXType_Int128:
+    /* Integers by size: int64_t is 'long' on Linux but 'long long' on macOS */
+    putf(b, "Int%lld", 8 * clang_Type_getSizeOf(t));
+    return;
+  case CXType_UShort:
+  case CXType_UInt:
+  case CXType_ULong:
+  case CXType_ULongLong:
+  case CXType_UInt128:
+    putf(b, "UInt%lld", 8 * clang_Type_getSizeOf(t));
+    return;
   default: {
     /* Builtin types (Int, Double, ...) by kind. Other types (e.g. dependent
      * types in templates) by their spelling. */
@@ -405,5 +412,3 @@ SEXP abitools_clang_signatures(SEXP file, SEXP args, SEXP names, SEXP own, SEXP 
   UNPROTECT(5);
   return out;
 }
-
-#endif

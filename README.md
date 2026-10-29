@@ -123,31 +123,29 @@ types that it uses, recursively. A change in a struct that is passed to a
 function changes the hash of that function, while changes in inline code,
 comments, or other functions do not.
 
-#### With libclang (recommended)
-
-If abitools is built with libclang (the `configure` script looks for
-`llvm-config`, `/usr/lib/llvm-*` on Ubuntu, and Homebrew's llvm on macOS), the
-headers are parsed by clang as they would be by a package that links to them:
-with the preprocessor, and with the include directories of R and of the
-LinkingTo dependencies of the package. The signature then describes the actual
-ABI: canonical types, and for structs their size, alignment and field offsets.
+The headers are parsed with libclang, which abitools requires (on Ubuntu:
+`apt-get install libclang-dev`, on macOS: `brew install llvm`). They are
+parsed as they would be by a package that links to them: with the
+preprocessor, and with the include directories of R and of the LinkingTo
+dependencies of the package. The signature describes the actual ABI:
+canonical types, and for structs their size, alignment and field offsets.
 Names, qualifiers, formatting, and macros do not matter; a changed array size
 from a `#define` or a reordered struct field does. For example, for
 `S4Vectors::_new_IntAE()`:
 
 ```
-function(ULong,ULong,Int)->*{24,8|0:ULong;64:ULong;128:*Int;}
+function(UInt64,UInt64,Int32)->*{24,8|0:UInt64;64:UInt64;128:*Int32;}
 ```
 
 The signature is taken from the cast at a call site of `R_GetCCallable()` in
 the headers (the type that dependents actually use to call the function), or
 else from a declaration of the function. Only headers that parse without
-errors are used. On Ubuntu, install `libclang-dev`.
+errors are used.
 
-#### Without libclang
-
-Otherwise, a simple parser finds the declarations in the headers. Packages
-declare their C API in different ways, which are all supported:
+For the functions that libclang does not find, for example in an `#ifdef`
+branch that is not active, a simple text parser looks for the declaration
+instead. It supports the different ways in which packages declare their C
+API:
 
 - a plain declaration `int fun(int x);` (cli, xts, actuar, ...), possibly with
   a macro as return type `EXTERN(int) fun(int x);` (nloptr)
@@ -159,9 +157,7 @@ declare their C API in different ways, which are all supported:
 - only a cast at the call site `f = (int (*)(int)) R_GetCCallable("pkg", "fun");`
   (RNifti, rxode2)
 
-This parser is also used for the functions that libclang does not find, for
-example in an `#ifdef` branch that is not active. If neither finds a function,
-the hash of all headers is used instead.
+If neither finds a function, the hash of all headers is used instead.
 
 Rcpp packages call only the few Rcpp functions they use, because these are
 inline functions in the Rcpp headers. Bioconductor packages include stubs for
@@ -263,14 +259,17 @@ Inspecting a package takes 0 to 2.5 seconds.
 - The package is inspected without being loaded, but unserializing its
   lazyload database loads the namespaces it refers to. Run it in the library
   that was used to build the package.
-- Without libclang, C function declarations and types are found with a
-  simple parser rather than a compiler: macros are not expanded, and types
-  that are defined in the headers of another package are not followed.
+- Functions that libclang does not find are hashed with a simple text
+  parser: macros are not expanded, and types that are defined in the headers
+  of another package are not followed.
 - Functions that are not mentioned in the headers at all (some packages
   declare them only in their own sources) are not exported, so changes to
   them are not detected.
-- Hashes from libclang and from the simple parser differ, so all packages in
-  a repository should be inspected with the same setup.
+- Hashes may depend on the version of libclang and of the system headers, so
+  all packages in a repository should be inspected with the same setup. Hashes
+  of C functions are the same on Linux and macOS, except for C++ functions
+  that use types of the C++ standard library (e.g. `std::string`), which
+  differs between the platforms.
 - The headers of `linked library` dependencies are hashed as a whole: any
   change in them triggers a rebuild.
 - The class hash ignores prototypes and validity methods. A changed prototype

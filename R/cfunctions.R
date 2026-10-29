@@ -84,14 +84,17 @@ read_strings <- function(file, chunk_size = 16e6){
   unique(unlist(out))
 }
 
+# Identifiers that end with a NUL byte. They usually also start after a NUL,
+# but not if they are the first string of a section, which may follow code.
 chunk_strings <- function(bytes){
   ident <- logical(256)
   ident[as.integer(charToRaw("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_")) + 1L] <- TRUE
-  nul <- which(bytes == 0)
-  starts <- nul[-length(nul)] + 1L
-  ends <- nul[-1] - 1L
-  bad <- c(0L, cumsum(!ident[as.integer(bytes) + 1L]))
-  keep <- ends > starts & ends - starts < 128L & bad[ends + 1L] == bad[starts]
+  ok <- ident[as.integer(bytes) + 1L]
+  n <- length(bytes)
+  starts <- which(ok & !c(FALSE, ok[-n]))
+  ends <- which(ok & !c(ok[-1], FALSE))
+  keep <- ends < n & ends > starts & ends - starts < 128L
+  keep[keep] <- bytes[ends[keep] + 1L] == 0
   if (!any(keep))
     return(character())
   # Extract all strings at once, including the NUL that ends each of them

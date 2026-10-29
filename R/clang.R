@@ -1,12 +1,9 @@
-# Signatures of C functions with libclang (if abitools was built with it).
-# Unlike the text parser in cfunctions.R, this runs the preprocessor and
+# Signatures of C functions with libclang. Unlike the text parser in
+# cfunctions.R (which is used for the functions that clang does not find,
+# e.g. in an inactive #ifdef branch), this runs the preprocessor and
 # describes the actual ABI: the canonical types of the return value and the
 # parameters, and for structs that are defined in the headers of the package
 # (or its LinkingTo dependencies) their size, alignment and field offsets.
-
-has_libclang <- function(){
-  isTRUE(getOption("abitools.libclang", TRUE)) && length(clang_resource_dir()) > 0
-}
 
 clang_resource_dir <- function(){
   .Call(abitools_clang_resource_dir)
@@ -17,7 +14,7 @@ clang_resource_dir <- function(){
 clang_signatures <- function(pkg, path, names, lib.loc = NULL){
   out <- rep(NA_character_, length(names))
   names(out) <- names
-  if (!has_libclang() || !length(names))
+  if (!length(names))
     return(out)
   variants <- lapply(names, callable_variants, pkg = pkg)
   config <- clang_config(path, lib.loc)
