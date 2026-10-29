@@ -70,39 +70,88 @@ directory that the package links to, and as `headers` otherwise.
 
 `abi_list()` lists the ABI **exports** and **imports** of a package. The
 exports are the parts that dependents may copy: a hash of each S4 class
-definition (slots, superclasses, virtual) and of the files in its `include`
-directory. Unlike the version, these hashes only change when something changes
-that affects dependents. The imports are the exports of its critical
-dependencies that the package copied when it was built: the classes that it
-extends, and the headers of `C API` and `linked library` dependencies.
+definition (slots, superclasses, virtual), a hash of each C function that it
+registers with `R_RegisterCCallable()`, and a hash of the files in its
+`include` directory. Unlike the version, these hashes only change when
+something changes that affects dependents. The imports are the exports of its
+critical dependencies that the package copied when it was built: the classes
+that it extends, the C functions of `C API` dependencies that it calls, and
+the headers of `linked library` dependencies.
 
 ```r
-abi_list("Rsamtools")
+abi_list("minqa")
 #> $exports
-#>                            key                             hash
-#> 1 Rsamtools::ApplyPileupsParam 614f6d9b9a46c60ec2728a5e00a85d0d
-#> 2           Rsamtools::BamFile ee6ceb9eb98d7600984ba1d3c68a9288
-#> ...
+#> [1] key  hash
+#> <0 rows> (or 0-length row.names)
 #>
 #> $imports
+#>                              key                             hash
+#> 1 Rcpp::Rcpp_precious_preserve() db326d5386e653731de061cef9d03e24
+#> 2   Rcpp::Rcpp_precious_remove() 84acf2c1e7fac9022b40c1e5c1c249e2
+#> 3               Rcpp::demangle() b7df01794cea5ffd92afa5cd4cc9fd17
+#> 4   Rcpp::rcpp_get_stack_trace() 11b1009f8761b93fbbdce90d8a3e5d32
+#> 5   Rcpp::rcpp_set_stack_trace() 8f9e78c8c3a7d415f3b31e11af05ec05
+
+abi_list("Rsamtools")$imports
 #>                            key                             hash
-#> 1           Biostrings/include dce746f9584e23b1fd191f87d0bb21c5
-#> 2              IRanges/include 8b347f47098d58de136577ff44f8f7c0
-#> 3            S4Vectors/include e2fc12515bdb6bc9b5b51ed7bcc79378
-#> 4         S4Vectors::Annotated 95bf8c6a9de4f2f9373d24ccc74fe28a
-#> 5              S4Vectors::List 7cded7a2c2addcb2a2d3392a89042c1e
-#> 6        S4Vectors::SimpleList 0857578da91dd860b1c84fbffb582a79
-#> 7            S4Vectors::Vector 10ab26d37b3e0ebc9fdf82fbfee25632
-#> 8      S4Vectors::list_OR_List d8ee15be3bab82ef301792952f2d7259
-#> 9  S4Vectors::vector_OR_Vector d1d36135046af6ee3cce1f81922f3392
-#> 10             XVector/include 3e1b8282380e0e124f309ebac42e49c5
+#> 1      Biostrings::_AAdecode() 2b5149b1b683df2f924ed4fdabba29b8
+#> ...
+#> 65        S4Vectors::Annotated 95bf8c6a9de4f2f9373d24ccc74fe28a
+#> 66             S4Vectors::List 7cded7a2c2addcb2a2d3392a89042c1e
+#> ...
 ```
 
-The key is `<package>::<class>` for an S4 class, and `<package>/include` for
-the C headers. Because package names cannot contain `:` or `/`, the package is
-always the part before the first `::` or `/`. An import is identical to the
-export of the dependency that it was copied from, as long as that has not
-changed.
+The key is `<package>::<class>` for an S4 class, `<package>::<function>()`
+for a C function, and `<package>/include` for the C headers. Because package
+names cannot contain `:` or `/`, the package is always the part before the
+first `::` or `/`. An import is identical to the export of the dependency that
+it was copied from, as long as that has not changed.
+
+### C functions
+
+R loads the shared library of each package privately, so packages cannot
+call each other's C functions through the linker. Instead, a package registers
+them with `R_RegisterCCallable("pkg", "fun")` and a dependent looks them up with
+`R_GetCCallable("pkg", "fun")`. The names of the functions that a dependent
+calls are therefore stored as strings in its shared library.
+
+The registered functions of a package are found by asking `R_GetCCallable()`
+for each name that appears both as a string in its shared library and in its
+headers. The hash of a function covers its signature (the return type and the
+types of its parameters, but not the names of the parameters) as declared in
+the headers, plus the definitions of the structs and other types that it uses,
+recursively. A
+change in a struct that is passed to a function changes the hash of that
+function, while changes in inline code, comments, or other functions do not.
+
+Packages declare their C API in different ways, which are all supported:
+
+- a plain declaration `int fun(int x);` (cli, xts, actuar, ...), possibly with
+  a macro as return type `EXTERN(int) fun(int x);` (nloptr)
+- a declaration without the prefix that the stubs add to the registered name:
+  `_fun` (Bioconductor), `_pkg_fun` (Rcpp interfaces), or the other way
+  around `M_fun` (Matrix), `_p_fun` (rxode2ll)
+- a function pointer `extern int (*fun)(int x);` (libgeos), or a variable with
+  a function pointer type `extern fun_type fun;` (PreciseSums)
+- only a cast at the call site `f = (int (*)(int)) R_GetCCallable("pkg", "fun");`
+  (RNifti, rxode2)
+
+If no declaration is found, the hash of all headers is used instead.
+
+Rcpp packages call only the few Rcpp functions they use, because these are
+inline functions in the Rcpp headers. Bioconductor packages include stubs for
+all functions of the C API of their dependencies, so they import all of them.
+Over the last six Rcpp releases, the headers changed every time, but none of
+the hashes of the 36 C functions of Rcpp did:
+
+| Rcpp version | headers | C functions changed |
+|--------------|---------|---------------------|
+| 1.0.11       | changed | 0 of 36             |
+| 1.0.12       | changed | 0 of 36             |
+| 1.0.13       | changed | 0 of 36             |
+| 1.0.14       | changed | 0 of 36             |
+| 1.1.0        | changed | 0 of 36             |
+| 1.1.2        | changed | 0 of 36             |
 
 This should be run right after the package is built, in the library that it
 was built with. Both data frames are flat, so `jsonlite::toJSON()` gives lists
@@ -182,10 +231,14 @@ Inspecting a package takes 0 to 2.5 seconds.
 - The package is inspected without being loaded, but unserializing its
   lazyload database loads the namespaces it refers to. Run it in the library
   that was used to build the package.
-- The header hash is coarse: any change in the `include` directory of a
-  `C API` or `linked library` dependency triggers a rebuild. Headers of
-  packages such as Rcpp change often, mostly in inline code that does not
-  affect the ABI.
+- C function declarations and types are found in the headers with a simple
+  parser rather than a compiler. Declarations generated by macros are not
+  found (the hash of all headers is used instead), and types that are defined
+  in the headers of another package are not followed. Functions that are not
+  mentioned in the headers at all (some packages declare them only in their
+  own sources) are not exported, so changes to them are not detected.
+- The headers of `linked library` dependencies are hashed as a whole: any
+  change in them triggers a rebuild.
 - The class hash ignores prototypes and validity methods. A changed prototype
   only results in stale defaults, and validity methods are looked up at
   runtime.

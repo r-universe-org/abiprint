@@ -38,9 +38,12 @@ super_package <- function(ext){
   attr(ext@superClass, "package") %||% ""
 }
 
+# Shared libraries of a package, but not the debug info that macOS stores in
+# libs/pkg.so.dSYM/Contents/Resources/DWARF/pkg.so
 shared_objects <- function(path){
-  list.files(file.path(path, "libs"), pattern = "\\.(so|dll|dylib)$",
-             recursive = TRUE, full.names = TRUE)
+  files <- list.files(file.path(path, "libs"), pattern = "\\.(so|dll|dylib)$",
+                      recursive = TRUE, full.names = TRUE)
+  files[!grepl(".dSYM/", files, fixed = TRUE)]
 }
 
 # Shared libraries that a package ships for others to link against, such as

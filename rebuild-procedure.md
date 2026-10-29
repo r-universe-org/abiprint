@@ -11,11 +11,12 @@ Run `abi_list(pkg)` right after the package has been installed in the build
 environment, using the same library that it was built against. It returns the
 ABI exports and imports of the package:
 
-- **exports**: the hashes of the S4 classes and C headers of the package
-  itself. Dependents are compared against these.
+- **exports**: the hashes of the S4 classes, C functions, and C headers of
+  the package itself. Dependents are compared against these.
 - **imports**: the exports of its critical dependencies that the package
-  copied when it was built: the classes that it extends, and the headers of
-  `C API` and `linked library` dependencies.
+  copied when it was built: the classes that it extends, the C functions of
+  `C API` dependencies that it calls, and the headers of `linked library`
+  dependencies.
 
 Store it with the package metadata. Both are flat data frames, so
 `jsonlite::toJSON()` gives lists of entries that are easy to query. For
@@ -28,7 +29,7 @@ _abi: {
     ...
   ],
   imports: [
-    {key: 'S4Vectors/include', hash: 'e2fc1251...'},
+    {key: 'S4Vectors::_new_IntAE()', hash: '80cb07b3...'},
     {key: 'S4Vectors::List', hash: '7cded7a2...'},
     {key: 'S4Vectors::Vector', hash: '10ab26d3...'},
     ...
@@ -36,9 +37,9 @@ _abi: {
 }
 ```
 
-The key is `<package>::<class>` for an S4 class, and `<package>/include` for
-the C headers. An import is identical to the export it was copied from, as
-long as that has not changed.
+The key is `<package>::<class>` for an S4 class, `<package>::<function>()`
+for a C function, and `<package>/include` for the C headers. An import is
+identical to the export it was copied from, as long as that has not changed.
 
 Version numbers are not used: most version bumps do not change anything that
 dependents copy. Code that a package copied from a dependency (such as
@@ -57,7 +58,8 @@ Suppose a new version of S4Vectors changes the `Vector` and `List` classes.
 ### 1. Diff the old and new exports
 
 Fetch the exports of the previous build of the package before replacing it,
-and compare them with the new ones, per class and for the headers. If
+and compare them with the new ones, per class, per C function, and for the
+headers. If
 nothing changed, stop. This is the case for most deployments, including
 version bumps without code changes, such as the twice-yearly version bump of
 all Bioconductor packages.
