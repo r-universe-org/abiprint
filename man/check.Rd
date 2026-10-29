@@ -10,10 +10,12 @@ abi_check(record, fingerprints = NULL, lib.loc = NULL)
 stale_classes(pkg, lib.loc = NULL)
 }
 \arguments{
-\item{record}{list as returned by \code{\link[=abi_record]{abi_record()}}, possibly read from JSON}
+\item{record}{data frame as returned by \code{\link[=abi_record]{abi_record()}}, possibly read from
+JSON}
 
-\item{fingerprints}{named list with the current \code{\link[=abi_fingerprint]{abi_fingerprint()}} of the
-dependencies. If \code{NULL}, they are computed from the installed packages.}
+\item{fingerprints}{data frame with the current fingerprints of the
+dependencies, i.e. the combined rows of \code{\link[=abi_fingerprint]{abi_fingerprint()}}. If \code{NULL},
+they are computed from the installed packages.}
 
 \item{lib.loc}{library to search, defaults to \code{\link[=.libPaths]{.libPaths()}}}
 

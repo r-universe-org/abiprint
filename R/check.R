@@ -9,43 +9,43 @@
 #' other packages. This finds packages in a local library that must be
 #' reinstalled after a dependency was updated.
 #'
-#' @param record list as returned by [abi_record()], possibly read from JSON
-#' @param fingerprints named list with the current [abi_fingerprint()] of the
-#' dependencies. If `NULL`, they are computed from the installed packages.
+#' @param record data frame as returned by [abi_record()], possibly read from
+#' JSON
+#' @param fingerprints data frame with the current fingerprints of the
+#' dependencies, i.e. the combined rows of [abi_fingerprint()]. If `NULL`,
+#' they are computed from the installed packages.
 #' @inheritParams critical_deps
 #' @return a data frame with the dependency and reason for each change
 #' @export
 #' @rdname check
 abi_check <- function(record, fingerprints = NULL, lib.loc = NULL){
-  out <- data.frame(package = character(), reason = character())
-  add <- function(package, reason){
-    out[nrow(out) + 1, ] <<- list(package, reason)
-  }
-  deps <- record$dependencies
-  for (dep in names(deps)) {
-    entry <- deps[[dep]]
-    fp <- if (is.null(fingerprints)) {
+  if (is.null(fingerprints)) {
+    fingerprints <- do.call(rbind, c(list(abi_table()), lapply(unique(record$package), function(dep){
       tryCatch(abi_fingerprint(dep, lib.loc), error = function(e) NULL)
+    })))
+  }
+  out <- data.frame(package = character(), reason = character())
+  for (i in seq_len(nrow(record))) {
+    dep <- record$package[i]
+    key <- record$key[i]
+    old <- record$hash[i]
+    if (!dep %in% fingerprints$package) {
+      reason <- "dependency not found"
     } else {
-      fingerprints[[dep]]
-    }
-    if (is.null(fp)) {
-      add(dep, "dependency not found")
-      next
-    }
-    if (length(entry$headers) && !identical(entry$headers, fp$headers))
-      add(dep, "C headers changed")
-    for (class in names(entry$classes)) {
-      now <- fp$classes[[class]]
-      if (is.null(now)) {
-        add(dep, sprintf("S4 class %s was removed", class))
-      } else if (!identical(now, entry$classes[[class]])) {
-        add(dep, sprintf("S4 class %s changed", class))
+      new <- fingerprints$hash[fingerprints$package == dep & fingerprints$key == key]
+      what <- if (startsWith(key, "class:")) paste("S4 class", sub("^class:", "", key)) else
+        if (key == "headers") "C headers" else key
+      reason <- if (!length(new)) {
+        paste(what, "was removed")
+      } else if (!identical(new, old)) {
+        if (key == "version") sprintf("version changed from %s to %s", old, new) else paste(what, "changed")
       }
     }
-    if (isTRUE(entry$check_version) && !identical(entry$version, fp$version))
-      add(dep, sprintf("version changed from %s to %s", entry$version, fp$version))
+    if (length(reason))
+      out[nrow(out) + 1, ] <- list(dep, reason)
   }
+  out <- unique(out)
+  row.names(out) <- NULL
   out
 }
 

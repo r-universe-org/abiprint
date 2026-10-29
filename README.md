@@ -64,7 +64,17 @@ refers to it), and as `headers` otherwise.
 
 `abi_fingerprint()` hashes the parts of a package that dependents copy: each S4
 class definition (slots, superclasses, virtual) and the files in its `include`
-directory. These hashes only change when something relevant changes.
+directory. These hashes only change when something relevant changes. It also
+includes the version.
+
+```r
+abi_fingerprint("stats4")
+#>   package               key                             hash
+#> 1  stats4         class:mle eab703b2a529d7ad345bcdbbc1e9ccc0
+#> 2  stats4 class:profile.mle 61cd47d017ec6e6e1b37238312f4318c
+#> 3  stats4 class:summary.mle d2e076c80523250d172cf1d50e4195dd
+#> 4  stats4           version                            4.6.1
+```
 
 `abi_record()` is meant to run right after a package is built. It records the
 fingerprints of only the parts of its critical dependencies that it actually
@@ -72,31 +82,32 @@ uses: the headers of `C API` dependencies and the classes that it extends. For
 copied code it records the version.
 
 ```r
-record <- abi_record("Rsamtools")
-jsonlite::toJSON(record, auto_unbox = TRUE)
+abi_record("Rsamtools")
+#>       package                    key                             hash
+#> 1  Biostrings                headers dce746f9584e23b1fd191f87d0bb21c5
+#> 2     IRanges                headers 8b347f47098d58de136577ff44f8f7c0
+#> 3   S4Vectors        class:Annotated 95bf8c6a9de4f2f9373d24ccc74fe28a
+#> 4   S4Vectors             class:List 7cded7a2c2addcb2a2d3392a89042c1e
+#> 5   S4Vectors       class:SimpleList 0857578da91dd860b1c84fbffb582a79
+#> 6   S4Vectors           class:Vector 10ab26d37b3e0ebc9fdf82fbfee25632
+#> 7   S4Vectors     class:list_OR_List d8ee15be3bab82ef301792952f2d7259
+#> 8   S4Vectors class:vector_OR_Vector d1d36135046af6ee3cce1f81922f3392
+#> 9   S4Vectors                headers e2fc12515bdb6bc9b5b51ed7bcc79378
+#> 10  S4Vectors                version                          0.51.10
+#> 11    XVector                headers 3e1b8282380e0e124f309ebac42e49c5
 ```
 
+Both functions return a data frame in the same format, so that
+`jsonlite::toJSON()` gives a flat list of entries, which is easy to store and
+query in a database:
+
 ```json
-{
-  "package": "Rsamtools",
-  "version": "2.29.0",
-  "dependencies": {
-    "IRanges": {
-      "version": "2.47.5",
-      "headers": "8b347f47098d58de136577ff44f8f7c0"
-    },
-    "S4Vectors": {
-      "version": "0.51.10",
-      "headers": "e2fc12515bdb6bc9b5b51ed7bcc79378",
-      "classes": {
-        "List": "7cded7a2c2addcb2a2d3392a89042c1e",
-        "Vector": "10ab26d37b3e0ebc9fdf82fbfee25632",
-        "...": "..."
-      },
-      "check_version": true
-    }
-  }
-}
+[
+  {"package": "Biostrings", "key": "headers", "hash": "dce746f9584e23b1fd191f87d0bb21c5"},
+  {"package": "IRanges", "key": "headers", "hash": "8b347f47098d58de136577ff44f8f7c0"},
+  {"package": "S4Vectors", "key": "class:Annotated", "hash": "95bf8c6a9de4f2f9373d24ccc74fe28a"},
+  ...
+]
 ```
 
 `abi_check()` compares a stored record with the current fingerprints of the
@@ -110,7 +121,8 @@ abi_check(record)
 ```
 
 Fingerprints are computed from the installed dependencies by default, or can be
-supplied by the caller, e.g. from the API of a package repository.
+supplied by the caller as a data frame with the combined rows of
+`abi_fingerprint()`, e.g. from the API of a package repository.
 
 For a local library without records, `stale_classes()` compares the S4 class
 definitions stored in an installed package with the current definitions of

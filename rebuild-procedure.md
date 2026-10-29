@@ -15,8 +15,9 @@ environment, using the same library that it was built against:
 - `abi_record(pkg)`: the fingerprints of the parts of its critical
   dependencies that the package uses.
 
-Store both with the package metadata. For efficient queries, store the record
-as a flat list of entries, one per class or header set:
+Store both with the package metadata. Both are data frames with one row per
+fingerprint, so `jsonlite::toJSON()` gives a flat list of entries that is easy
+to query. For example, part of the record of Rsamtools:
 
 ```js
 _abi: [
@@ -27,8 +28,9 @@ _abi: [
 ]
 ```
 
-The `version` entry is only present for dependencies of which the package
-copied code (`check_version` in the record).
+The fingerprint of a package always has a `version` entry. The record only has
+one for dependencies without a fingerprint: those of which the package copied
+code, or a C API without headers.
 
 Fingerprints from one platform are enough, provided the hashes are identical
 across platforms (not yet verified).

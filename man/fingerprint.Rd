@@ -17,6 +17,9 @@ abi_record(pkg, lib.loc = NULL, ignore = "R6")
 \item{ignore}{namespaces whose code is copied by design, such as the
 generator functions of R6 classes.}
 }
+\value{
+a data frame with columns \code{package}, \code{key} and \code{hash}
+}
 \description{
 \code{abi_fingerprint()} is computed for a package that others depend on. It
 contains a hash of each S4 class definition and of the C headers in its
@@ -27,11 +30,15 @@ something changes that dependents copy at build time.
 \code{abi_record()} is computed for a package right after it was built. It
 records the fingerprints of the critical dependencies it was built against,
 see \code{\link[=critical_deps]{critical_deps()}}. Only the classes that it extends are recorded, so a
-change in other classes of the dependency does not trigger a rebuild.
+change in other classes of the dependency does not trigger a rebuild. For
+dependencies without a fingerprint (copied code, or a C API without
+headers), it records the version instead.
 
-Both return plain lists that can be stored as JSON.
+Both return a data frame with one row per fingerprint, in the same format,
+so that \code{\link[jsonlite:toJSON]{jsonlite::toJSON()}} gives a flat list of entries that is easy to
+query in a database. The \code{key} column is one of \verb{class:<name>}, \code{headers}
+or \code{version}.
 }
 \examples{
-fp <- abi_fingerprint("stats4")
-str(fp)
+abi_fingerprint("stats4")
 }

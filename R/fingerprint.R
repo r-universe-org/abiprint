@@ -8,53 +8,54 @@
 #' `abi_record()` is computed for a package right after it was built. It
 #' records the fingerprints of the critical dependencies it was built against,
 #' see [critical_deps()]. Only the classes that it extends are recorded, so a
-#' change in other classes of the dependency does not trigger a rebuild.
+#' change in other classes of the dependency does not trigger a rebuild. For
+#' dependencies without a fingerprint (copied code, or a C API without
+#' headers), it records the version instead.
 #'
-#' Both return plain lists that can be stored as JSON.
+#' Both return a data frame with one row per fingerprint, in the same format,
+#' so that [jsonlite::toJSON()] gives a flat list of entries that is easy to
+#' query in a database. The `key` column is one of `class:<name>`, `headers`
+#' or `version`.
 #'
 #' @inheritParams critical_deps
+#' @return a data frame with columns `package`, `key` and `hash`
 #' @export
 #' @rdname fingerprint
 #' @examples
-#' fp <- abi_fingerprint("stats4")
-#' str(fp)
+#' abi_fingerprint("stats4")
 abi_fingerprint <- function(pkg, lib.loc = NULL){
   path <- find.package(pkg, lib.loc)
-  defs <- class_defs(load_rdb(path, pkg))
-  list(
-    package = pkg,
-    version = read_description(path)$Version,
-    headers = header_hash(path),
-    classes = lapply(defs, class_hash)
-  )
+  classes <- vapply(class_defs(load_rdb(path, pkg)), class_hash, "")
+  names(classes) <- paste0("class:", names(classes))
+  hashes <- c(version = read_description(path)$Version, headers = header_hash(path), classes)
+  abi_table(pkg, names(hashes), unname(hashes))
 }
 
 #' @export
 #' @rdname fingerprint
 abi_record <- function(pkg, lib.loc = NULL, ignore = "R6"){
-  path <- find.package(pkg, lib.loc)
   deps <- critical_deps(pkg, lib.loc = lib.loc, ignore = ignore)
   deps <- deps[deps$type != "headers", ]
-  record <- list()
+  keys <- abi_table()
   for (dep in unique(deps$package)) {
     rows <- deps[deps$package == dep, ]
-    fp <- abi_fingerprint(dep, lib.loc)
-    entry <- list(version = fp$version)
+    wanted <- paste0("class:", rows$detail[rows$type == "S4 class"])
     if ("C API" %in% rows$type)
-      entry$headers <- fp$headers
-    classes <- rows$detail[rows$type == "S4 class"]
-    if (length(classes))
-      entry$classes <- fp$classes[classes]
+      wanted <- c(wanted, "headers")
+    fp <- abi_fingerprint(dep, lib.loc)
     # Without fingerprint, fall back to the version of the dependency
-    if ("copied code" %in% rows$type || ("C API" %in% rows$type && is.null(fp$headers)))
-      entry$check_version <- TRUE
-    record[[dep]] <- entry
+    if ("copied code" %in% rows$type || ("C API" %in% rows$type && !"headers" %in% fp$key))
+      wanted <- c(wanted, "version")
+    keys <- rbind(keys, fp[fp$key %in% wanted, ])
   }
-  list(
-    package = pkg,
-    version = read_description(path)$Version,
-    dependencies = record
-  )
+  abi_table(keys$package, keys$key, keys$hash)
+}
+
+abi_table <- function(package = character(), key = character(), hash = character()){
+  out <- data.frame(package = package, key = key, hash = hash)
+  out <- out[order(out$package, out$key, method = "radix"), ]
+  row.names(out) <- NULL
+  out
 }
 
 # The slots include the inherited ones, so a change in any of the
