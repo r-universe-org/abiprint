@@ -1,7 +1,8 @@
 # Hashes of the C functions that a package registers with R_RegisterCCallable().
-# The hash covers the declaration of the function in the headers of the
-# package, and the definitions of the types that it uses. If no declaration is
-# found, the hash of all headers is used instead.
+# The hash covers the signature of the function, and the definitions of the
+# types that it uses. The signature is found with libclang if available (see
+# clang.R), otherwise with the simple parser below. If neither finds the
+# function, the hash of all headers is used instead.
 c_function_hashes <- function(pkg, path, lib.loc = NULL){
   libs <- shared_objects(path)
   if (!length(libs) || !contains_bytes(libs, "R_RegisterCCallable"))
@@ -13,7 +14,10 @@ c_function_hashes <- function(pkg, path, lib.loc = NULL){
   statements <- unlist(lapply(headers, header_statements))
   defs <- type_definitions(statements)
   fallback <- header_hash(path) %||% ""
+  clang <- clang_signatures(pkg, path, names, lib.loc)
   hashes <- vapply(names, function(name){
+    if (!is.na(clang[[name]]))
+      return(md5_text(c("clang", clang[[name]])))
     sig <- callable_signature(statements, defs, name, pkg, headers)
     if (length(sig)) md5_text(sig) else fallback
   }, "")
@@ -205,7 +209,7 @@ type_definitions <- function(statements){
 # a last resort, accept a declaration with a single-word prefix: M_name
 # (Matrix) or _p_name (rxode2ll).
 callable_signature <- function(statements, defs, name, pkg, headers = character()){
-  names <- unique(c(name, sub(paste0("^_", pkg, "_"), "", name), sub("^_", "", name)))
+  names <- callable_variants(name, pkg)
   for (n in names) {
     decls <- declarations(statements, defs, n)
     if (length(decls))

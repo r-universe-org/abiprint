@@ -1,0 +1,49 @@
+#!/bin/sh
+# Find libclang, which is used (if available) to parse C headers. Set
+# LLVM_CONFIG to the llvm-config of the LLVM to use, or ABITOOLS_NO_LIBCLANG
+# to build without it.
+
+if [ -z "$ABITOOLS_NO_LIBCLANG" ] && [ -z "$LLVM_CONFIG" ]; then
+  for candidate in llvm-config $(ls -r /usr/lib/llvm-*/bin/llvm-config 2>/dev/null) \
+      /opt/homebrew/opt/llvm/bin/llvm-config /usr/local/opt/llvm/bin/llvm-config; do
+    if command -v "$candidate" >/dev/null 2>&1; then
+      LLVM_CONFIG="$candidate"
+      break
+    fi
+  done
+fi
+
+if [ -z "$ABITOOLS_NO_LIBCLANG" ] && [ "$LLVM_CONFIG" ]; then
+  INCLUDEDIR=$("$LLVM_CONFIG" --includedir)
+  LIBDIR=$("$LLVM_CONFIG" --libdir)
+  RESOURCEDIR=$("$("$LLVM_CONFIG" --bindir)/clang" -print-resource-dir 2>/dev/null)
+elif [ -z "$ABITOOLS_NO_LIBCLANG" ]; then
+  # Ubuntu: libclang-dev without llvm-config (in /usr/lib/llvm-<version>)
+  for dir in $(ls -d /usr/lib/llvm-* 2>/dev/null | sort -V -r); do
+    if [ -f "$dir/include/clang-c/Index.h" ]; then
+      INCLUDEDIR="$dir/include"
+      LIBDIR="$dir/lib"
+      break
+    fi
+  done
+fi
+
+if [ "$LIBDIR" ]; then
+  if [ -z "$RESOURCEDIR" ]; then
+    RESOURCEDIR=$(ls -d "$LIBDIR"/clang/* 2>/dev/null | sort -V | tail -1)
+  fi
+  if [ -f "$INCLUDEDIR/clang-c/Index.h" ] && ls "$LIBDIR"/libclang.* >/dev/null 2>&1 && [ -d "$RESOURCEDIR/include" ]; then
+    echo "Using libclang from $LIBDIR"
+    PKG_CPPFLAGS="-DHAVE_LIBCLANG -I$INCLUDEDIR"
+    echo "#define CLANG_RESOURCE_DIR \"$RESOURCEDIR\"" > src/clang_config.h
+    PKG_LIBS="-L$LIBDIR -lclang -Wl,-rpath,$LIBDIR"
+  else
+    echo "Found LLVM in $LIBDIR, but no libclang, clang-c headers or clang resource directory"
+  fi
+fi
+
+if [ -z "$PKG_LIBS" ]; then
+  echo "Building without libclang: C headers are parsed with a simpler parser"
+fi
+
+sed -e "s|@PKG_CPPFLAGS@|$PKG_CPPFLAGS|" -e "s|@PKG_LIBS@|$PKG_LIBS|" src/Makevars.in > src/Makevars
