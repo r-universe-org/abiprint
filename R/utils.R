@@ -43,17 +43,32 @@ shared_objects <- function(path){
              recursive = TRUE, full.names = TRUE)
 }
 
-# Packages that provide a C API via R_RegisterCCallable() are called through
-# R_GetCCallable("pkg", "fun"), so the name of the package is stored as a
-# string in the shared library of the caller.
-mentions_package <- function(files, pkg){
-  needle <- c(charToRaw(pkg), as.raw(0))
+# Shared libraries that a package ships for others to link against, such as
+# the TBB library in RcppParallel.
+shipped_libraries <- function(path){
+  list.files(file.path(path, "lib"), pattern = "\\.(so|dylib|dll)(\\.[0-9.]+)?$", recursive = TRUE)
+}
+
+# Check if any of the files contains the string as a separate C string, i.e.
+# preceded by a NUL byte (or one of the characters in 'after') and followed by
+# NUL. Short strings such as "BH" also occur by chance inside machine code.
+contains_string <- function(files, string, after = ""){
+  starts <- as.raw(c(0, utf8ToInt(after)))
+  needle <- c(charToRaw(string), as.raw(0))
   for (file in files) {
     bytes <- readBin(file, "raw", file.size(file))
     for (pos in grepRaw(needle, bytes, fixed = TRUE, all = TRUE)) {
-      if (pos == 1 || !grepl("[A-Za-z0-9._]", rawToChar(bytes[pos - 1])))
+      if (pos > 1 && bytes[pos - 1] %in% starts)
         return(TRUE)
     }
+  }
+  FALSE
+}
+
+contains_bytes <- function(files, string){
+  for (file in files) {
+    if (length(grepRaw(string, readBin(file, "raw", file.size(file)), fixed = TRUE)))
+      return(TRUE)
   }
   FALSE
 }

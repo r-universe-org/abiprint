@@ -64,6 +64,15 @@ test_that("packages without classes or headers have no exports", {
   expect_equal(nrow(x$imports), 0)
 })
 
+test_that("empty imports and exports survive a JSON round trip", {
+  skip_if_not_installed("jsonlite")
+  x <- jsonlite::fromJSON(jsonlite::toJSON(abi_list("tools")))
+  expect_equal(x$imports, list())
+  expect_equal(nrow(abi_check(x)), 0)
+  record <- list(imports = data.frame(key = "S4Vectors::Vector", hash = "10ab26d3"))
+  expect_equal(abi_check(record, exports = list())$reason, "dependency not found")
+})
+
 test_that("imports and exports are stored as flat lists in JSON", {
   skip_on_cran()
   skip_if_not_installed("jsonlite")

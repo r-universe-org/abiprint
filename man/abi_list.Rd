@@ -30,8 +30,9 @@ when something changes that affects dependents.
 
 The \strong{imports} are the exports of its dependencies that the package copied
 when it was built: the classes that it extends, and the headers of \verb{C API}
-dependencies (see \code{\link[=abi_deps]{abi_deps()}}). Other classes of the dependency are
-not included, so a change in those does not trigger a rebuild.
+and \verb{linked library} dependencies (see \code{\link[=abi_deps]{abi_deps()}}). Other classes of the
+dependency are not included, so a change in those does not trigger a
+rebuild.
 
 A package needs to be rebuilt when one of its imports no longer matches the
 current export of the dependency, see \code{\link[=abi_check]{abi_check()}}. Code that was copied

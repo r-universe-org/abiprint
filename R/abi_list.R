@@ -11,8 +11,9 @@
 #'
 #' The **imports** are the exports of its dependencies that the package copied
 #' when it was built: the classes that it extends, and the headers of `C API`
-#' dependencies (see [abi_deps()]). Other classes of the dependency are
-#' not included, so a change in those does not trigger a rebuild.
+#' and `linked library` dependencies (see [abi_deps()]). Other classes of the
+#' dependency are not included, so a change in those does not trigger a
+#' rebuild.
 #'
 #' A package needs to be rebuilt when one of its imports no longer matches the
 #' current export of the dependency, see [abi_check()]. Code that was copied
@@ -46,13 +47,13 @@ abi_exports <- function(pkg, lib.loc = NULL){
 
 abi_imports <- function(pkg, lib.loc = NULL){
   path <- find.package(pkg, lib.loc)
-  deps <- rbind(linkingto_deps(path), s4_deps(load_rdb(path, pkg), pkg, lib.loc))
+  deps <- rbind(linkingto_deps(path, lib.loc), s4_deps(load_rdb(path, pkg), pkg, lib.loc))
   deps <- deps[deps$type != "headers", ]
   out <- abi_table()
   for (dep in unique(deps$package)) {
     rows <- deps[deps$package == dep, ]
     wanted <- paste0(dep, "::", rows$detail[rows$type == "S4 class"])
-    if ("C API" %in% rows$type)
+    if (any(c("C API", "linked library") %in% rows$type))
       wanted <- c(wanted, paste0(dep, "/include"))
     exports <- abi_exports(dep, lib.loc)
     out <- rbind(out, exports[exports$key %in% wanted, ])

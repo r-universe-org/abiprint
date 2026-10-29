@@ -25,9 +25,13 @@ the package may need to be rebuilt.
 \details{
 The \code{type} column in the result is one of:
 \itemize{
-\item \verb{C API}: a \code{LinkingTo} dependency that the shared library calls at
+\item \verb{C API}: a \code{LinkingTo} dependency that registers C functions with
+\code{R_RegisterCCallable()}, which the shared library of the package calls at
 runtime via \code{R_GetCCallable()}. Changes in its headers (struct layouts,
 function signatures) break the binary.
+\item \verb{linked library}: a \code{LinkingTo} dependency that ships a shared library
+in its \code{lib} directory (such as TBB in RcppParallel), which the shared
+library of the package links to.
 \item \code{headers}: a \code{LinkingTo} dependency that is not called at runtime, for
 example a header-only or static library. The binary keeps working when
 it changes, so this is informational only.

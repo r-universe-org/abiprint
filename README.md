@@ -25,9 +25,11 @@ that is copied by value when the package is installed:
    XVector, Biostrings and Rcpp export C functions with `R_RegisterCCallable()`
    and ship headers with stubs that call `R_GetCCallable("pkg", "fun")`. The
    caller is compiled against the struct layouts and function signatures in
-   those headers. Header-only libraries (RcppArmadillo, BH, cpp11) and bundled
-   static libraries (Rhtslib, Rhdf5lib) are different: their code is compiled
-   into the binary, which keeps working when the dependency changes.
+   those headers. Similarly, RcppParallel ships a shared TBB library that
+   packages such as rstan link to. Header-only libraries (RcppArmadillo,
+   RcppEigen, BH, cpp11) and bundled static libraries (Rhtslib, Rhdf5lib) are
+   different: their code is compiled into the binary, which keeps working when
+   the dependency changes.
 2. **S4 classes that extend a class from another package.** The stored
    definition of the subclass includes all inherited slots and superclasses. If
    the superclass changes, the subclass becomes inconsistent. This is the most
@@ -60,9 +62,11 @@ abi_deps("Rsamtools")
 #>     XVector       C API
 ```
 
-A `LinkingTo` dependency is classified as `C API` if its name appears as a
-string in the shared library of the package (which is how `R_GetCCallable()`
-refers to it), and as `headers` otherwise.
+A `LinkingTo` dependency is classified as `C API` if it registers C functions
+with `R_RegisterCCallable()`, and its name appears as a separate string in the
+shared library of the package (which is how `R_GetCCallable()` refers to it).
+It is classified as `linked library` if it ships a shared library in its `lib`
+directory that the package links to, and as `headers` otherwise.
 
 `abi_list()` lists the ABI **exports** and **imports** of a package. The
 exports are the parts that dependents may copy: a hash of each S4 class
@@ -70,7 +74,7 @@ definition (slots, superclasses, virtual) and of the files in its `include`
 directory. Unlike the version, these hashes only change when something changes
 that affects dependents. The imports are the exports of its critical
 dependencies that the package copied when it was built: the classes that it
-extends, and the headers of `C API` dependencies.
+extends, and the headers of `C API` and `linked library` dependencies.
 
 ```r
 abi_list("Rsamtools")
@@ -179,8 +183,9 @@ Inspecting a package takes 0 to 2.5 seconds.
   lazyload database loads the namespaces it refers to. Run it in the library
   that was used to build the package.
 - The header hash is coarse: any change in the `include` directory of a
-  `C API` dependency triggers a rebuild. Headers of packages such as Rcpp
-  change often, mostly in inline code that does not affect the ABI.
+  `C API` or `linked library` dependency triggers a rebuild. Headers of
+  packages such as Rcpp change often, mostly in inline code that does not
+  affect the ABI.
 - The class hash ignores prototypes and validity methods. A changed prototype
   only results in stale defaults, and validity methods are looked up at
   runtime.
@@ -189,4 +194,6 @@ Inspecting a package takes 0 to 2.5 seconds.
 - Copied code is not fingerprinted, so a change in a copied function does not
   trigger a rebuild. Objects copied by design, such as the generator functions
   of R6 classes, are not reported by `abi_deps()`.
-- Hashes have not yet been verified to be identical across platforms.
+- Hashes have not yet been verified to be identical across platforms, and the
+  detection of `C API` and `linked library` dependencies has only been tested
+  on macOS binaries.

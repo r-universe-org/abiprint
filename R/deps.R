@@ -6,9 +6,13 @@
 #'
 #' The `type` column in the result is one of:
 #'
-#'  - `C API`: a `LinkingTo` dependency that the shared library calls at
+#'  - `C API`: a `LinkingTo` dependency that registers C functions with
+#'    `R_RegisterCCallable()`, which the shared library of the package calls at
 #'    runtime via `R_GetCCallable()`. Changes in its headers (struct layouts,
 #'    function signatures) break the binary.
+#'  - `linked library`: a `LinkingTo` dependency that ships a shared library
+#'    in its `lib` directory (such as TBB in RcppParallel), which the shared
+#'    library of the package links to.
 #'  - `headers`: a `LinkingTo` dependency that is not called at runtime, for
 #'    example a header-only or static library. The binary keeps working when
 #'    it changes, so this is informational only.
@@ -35,7 +39,7 @@ abi_deps <- function(pkg, lib.loc = NULL, ignore = "R6"){
   db <- load_rdb(path, pkg)
   copied <- copied_code(db, pkg, ignore)
   out <- rbind(
-    linkingto_deps(path),
+    linkingto_deps(path, lib.loc),
     s4_deps(db, pkg, lib.loc),
     deps_table(names(copied) %||% character(), "copied code", unname(vapply(copied, paste, "", collapse = ", ")))
   )
@@ -50,11 +54,27 @@ deps_table <- function(package = character(), type = character(), detail = chara
              detail = rep(detail, length.out = length(package)))
 }
 
-linkingto_deps <- function(path){
+linkingto_deps <- function(path, lib.loc = NULL){
   libs <- shared_objects(path)
   deps <- parse_deps(read_description(path)$LinkingTo)
-  types <- vapply(deps, function(dep) if (mentions_package(libs, dep)) "C API" else "headers", "")
+  types <- vapply(deps, linkingto_type, "", libs = libs, lib.loc = lib.loc)
   deps_table(deps, unname(types), "")
+}
+
+linkingto_type <- function(dep, libs, lib.loc){
+  dep_path <- tryCatch(find.package(dep, lib.loc), error = function(e) NULL)
+  if (length(libs) && length(dep_path)) {
+    # A C API is registered with R_RegisterCCallable() and called through
+    # R_GetCCallable("pkg", "fun"), so the caller contains the package name.
+    if (contains_bytes(shared_objects(dep_path), "R_RegisterCCallable") &&
+        contains_string(libs, dep))
+      return("C API")
+    for (lib in shipped_libraries(dep_path)) {
+      if (contains_string(libs, basename(lib), after = "/"))
+        return("linked library")
+    }
+  }
+  "headers"
 }
 
 s4_deps <- function(db, pkg, lib.loc){

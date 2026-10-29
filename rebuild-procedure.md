@@ -15,7 +15,7 @@ ABI exports and imports of the package:
   itself. Dependents are compared against these.
 - **imports**: the exports of its critical dependencies that the package
   copied when it was built: the classes that it extends, and the headers of
-  `C API` dependencies.
+  `C API` and `linked library` dependencies.
 
 Store it with the package metadata. Both are flat data frames, so
 `jsonlite::toJSON()` gives lists of entries that are easy to query. For

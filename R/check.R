@@ -19,12 +19,14 @@
 #' @export
 #' @rdname check
 abi_check <- function(x, exports = NULL, lib.loc = NULL){
-  imports <- x$imports
+  # jsonlite::fromJSON() turns an empty array into list()
+  imports <- abi_table(x$imports$key, x$imports$hash)
   if (is.null(exports)) {
     exports <- do.call(rbind, c(list(abi_table()), lapply(unique(key_package(imports$key)), function(dep){
       tryCatch(abi_exports(dep, lib.loc), error = function(e) NULL)
     })))
   }
+  exports <- abi_table(exports$key, exports$hash)
   out <- data.frame(package = character(), reason = character())
   for (i in seq_len(nrow(imports))) {
     key <- imports$key[i]
