@@ -5,17 +5,18 @@
 \alias{stale_classes}
 \title{Check if a package needs to be rebuilt}
 \usage{
-abi_check(record, fingerprints = NULL, lib.loc = NULL)
+abi_check(x, exports = NULL, lib.loc = NULL)
 
 stale_classes(pkg, lib.loc = NULL)
 }
 \arguments{
-\item{record}{data frame as returned by \code{\link[=abi_record]{abi_record()}}, possibly read from
-JSON}
+\item{x}{data frame as returned by \code{\link[=abiprint]{abiprint()}}, possibly read from JSON.
+Only the imports are used.}
 
-\item{fingerprints}{data frame with the current fingerprints of the
-dependencies, i.e. the combined rows of \code{\link[=abi_fingerprint]{abi_fingerprint()}}. If \code{NULL},
-they are computed from the installed packages.}
+\item{exports}{data frame with the current exports of the dependencies,
+e.g. the combined output of \code{\link[=abiprint]{abiprint()}} for each of them. Rows with
+imports are ignored. If \code{NULL}, the exports are computed from the installed
+packages.}
 
 \item{lib.loc}{library to search, defaults to \code{\link[=.libPaths]{.libPaths()}}}
 
@@ -25,13 +26,13 @@ they are computed from the installed packages.}
 a data frame with the dependency and reason for each change
 }
 \description{
-\code{abi_check()} compares the record that was stored when the package was
-built (see \code{\link[=abi_record]{abi_record()}}) with the current fingerprints of its
+\code{abi_check()} compares the ABI imports of a package, as stored when it was
+built (see \code{\link[=abiprint]{abiprint()}}), with the current ABI exports of its
 dependencies. The package needs to be rebuilt if the result has any rows.
 }
 \details{
-\code{stale_classes()} needs no record: it compares the S4 class definitions in
-an installed package with the current definitions of their superclasses in
-other packages. This finds packages in a local library that must be
-reinstalled after a dependency was updated.
+\code{stale_classes()} needs no stored imports: it compares the S4 class
+definitions in an installed package with the current definitions of their
+superclasses in other packages. This finds packages in a local library that
+must be reinstalled after a dependency was updated.
 }

@@ -1,38 +1,41 @@
 #' Check if a package needs to be rebuilt
 #'
-#' `abi_check()` compares the record that was stored when the package was
-#' built (see [abi_record()]) with the current fingerprints of its
+#' `abi_check()` compares the ABI imports of a package, as stored when it was
+#' built (see [abiprint()]), with the current ABI exports of its
 #' dependencies. The package needs to be rebuilt if the result has any rows.
 #'
-#' `stale_classes()` needs no record: it compares the S4 class definitions in
-#' an installed package with the current definitions of their superclasses in
-#' other packages. This finds packages in a local library that must be
-#' reinstalled after a dependency was updated.
+#' `stale_classes()` needs no stored imports: it compares the S4 class
+#' definitions in an installed package with the current definitions of their
+#' superclasses in other packages. This finds packages in a local library that
+#' must be reinstalled after a dependency was updated.
 #'
-#' @param record data frame as returned by [abi_record()], possibly read from
-#' JSON
-#' @param fingerprints data frame with the current fingerprints of the
-#' dependencies, i.e. the combined rows of [abi_fingerprint()]. If `NULL`,
-#' they are computed from the installed packages.
+#' @param x data frame as returned by [abiprint()], possibly read from JSON.
+#' Only the imports are used.
+#' @param exports data frame with the current exports of the dependencies,
+#' e.g. the combined output of [abiprint()] for each of them. Rows with
+#' imports are ignored. If `NULL`, the exports are computed from the installed
+#' packages.
 #' @inheritParams critical_deps
 #' @return a data frame with the dependency and reason for each change
 #' @export
 #' @rdname check
-abi_check <- function(record, fingerprints = NULL, lib.loc = NULL){
-  if (is.null(fingerprints)) {
-    fingerprints <- do.call(rbind, c(list(abi_table()), lapply(unique(record$package), function(dep){
-      tryCatch(abi_fingerprint(dep, lib.loc), error = function(e) NULL)
+abi_check <- function(x, exports = NULL, lib.loc = NULL){
+  imports <- x[x$type == "import", ]
+  if (is.null(exports)) {
+    exports <- do.call(rbind, c(list(abi_table()), lapply(unique(imports$package), function(dep){
+      tryCatch(abi_exports(dep, lib.loc), error = function(e) NULL)
     })))
   }
+  exports <- exports[exports$type == "export", ]
   out <- data.frame(package = character(), reason = character())
-  for (i in seq_len(nrow(record))) {
-    dep <- record$package[i]
-    key <- record$key[i]
-    old <- record$hash[i]
-    if (!dep %in% fingerprints$package) {
+  for (i in seq_len(nrow(imports))) {
+    dep <- imports$package[i]
+    key <- imports$key[i]
+    old <- imports$hash[i]
+    if (!dep %in% exports$package) {
       reason <- "dependency not found"
     } else {
-      new <- fingerprints$hash[fingerprints$package == dep & fingerprints$key == key]
+      new <- exports$hash[exports$package == dep & exports$key == key]
       what <- if (startsWith(key, "class:")) paste("S4 class", sub("^class:", "", key)) else
         if (key == "headers") "C headers" else key
       reason <- if (!length(new)) {

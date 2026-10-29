@@ -62,83 +62,75 @@ A `LinkingTo` dependency is classified as `C API` if its name appears as a
 string in the shared library of the package (which is how `R_GetCCallable()`
 refers to it), and as `headers` otherwise.
 
-`abi_fingerprint()` hashes the parts of a package that dependents copy: each S4
-class definition (slots, superclasses, virtual) and the files in its `include`
-directory. These hashes only change when something relevant changes. It also
-includes the version.
+`abiprint()` lists the ABI **exports** and **imports** of a package. The
+exports are the parts that dependents may copy: a hash of each S4 class
+definition (slots, superclasses, virtual) and of the files in its `include`
+directory, plus the version. These hashes only change when something relevant
+changes. The imports are the exports of its critical dependencies that the
+package copied when it was built: the classes that it extends, and the headers
+of `C API` dependencies. For copied code, it imports the version.
 
 ```r
-abi_fingerprint("stats4")
-#>   package               key                             hash
-#> 1  stats4         class:mle eab703b2a529d7ad345bcdbbc1e9ccc0
-#> 2  stats4 class:profile.mle 61cd47d017ec6e6e1b37238312f4318c
-#> 3  stats4 class:summary.mle d2e076c80523250d172cf1d50e4195dd
-#> 4  stats4           version                            4.6.1
+abiprint("Rsamtools")
+#>      type    package                     key                             hash
+#> 1  export  Rsamtools class:ApplyPileupsParam 614f6d9b9a46c60ec2728a5e00a85d0d
+#> 2  export  Rsamtools           class:BamFile ee6ceb9eb98d7600984ba1d3c68a9288
+#> ...
+#> 20 import Biostrings                 headers dce746f9584e23b1fd191f87d0bb21c5
+#> 21 import    IRanges                 headers 8b347f47098d58de136577ff44f8f7c0
+#> 22 import  S4Vectors         class:Annotated 95bf8c6a9de4f2f9373d24ccc74fe28a
+#> 23 import  S4Vectors              class:List 7cded7a2c2addcb2a2d3392a89042c1e
+#> 24 import  S4Vectors        class:SimpleList 0857578da91dd860b1c84fbffb582a79
+#> 25 import  S4Vectors            class:Vector 10ab26d37b3e0ebc9fdf82fbfee25632
+#> 26 import  S4Vectors      class:list_OR_List d8ee15be3bab82ef301792952f2d7259
+#> 27 import  S4Vectors  class:vector_OR_Vector d1d36135046af6ee3cce1f81922f3392
+#> 28 import  S4Vectors                 headers e2fc12515bdb6bc9b5b51ed7bcc79378
+#> 29 import  S4Vectors                 version                          0.51.10
+#> 30 import    XVector                 headers 3e1b8282380e0e124f309ebac42e49c5
 ```
 
-`abi_record()` is meant to run right after a package is built. It records the
-fingerprints of only the parts of its critical dependencies that it actually
-uses: the headers of `C API` dependencies and the classes that it extends. For
-copied code it records the version.
-
-```r
-abi_record("Rsamtools")
-#>       package                    key                             hash
-#> 1  Biostrings                headers dce746f9584e23b1fd191f87d0bb21c5
-#> 2     IRanges                headers 8b347f47098d58de136577ff44f8f7c0
-#> 3   S4Vectors        class:Annotated 95bf8c6a9de4f2f9373d24ccc74fe28a
-#> 4   S4Vectors             class:List 7cded7a2c2addcb2a2d3392a89042c1e
-#> 5   S4Vectors       class:SimpleList 0857578da91dd860b1c84fbffb582a79
-#> 6   S4Vectors           class:Vector 10ab26d37b3e0ebc9fdf82fbfee25632
-#> 7   S4Vectors     class:list_OR_List d8ee15be3bab82ef301792952f2d7259
-#> 8   S4Vectors class:vector_OR_Vector d1d36135046af6ee3cce1f81922f3392
-#> 9   S4Vectors                headers e2fc12515bdb6bc9b5b51ed7bcc79378
-#> 10  S4Vectors                version                          0.51.10
-#> 11    XVector                headers 3e1b8282380e0e124f309ebac42e49c5
-```
-
-Both functions return a data frame in the same format, so that
-`jsonlite::toJSON()` gives a flat list of entries, which is easy to store and
-query in a database:
+This should be run right after the package is built, in the library that it
+was built with. The result is a flat data frame, so `jsonlite::toJSON()` gives
+a list of entries that is easy to store and query in a database:
 
 ```json
 [
-  {"package": "Biostrings", "key": "headers", "hash": "dce746f9584e23b1fd191f87d0bb21c5"},
-  {"package": "IRanges", "key": "headers", "hash": "8b347f47098d58de136577ff44f8f7c0"},
-  {"package": "S4Vectors", "key": "class:Annotated", "hash": "95bf8c6a9de4f2f9373d24ccc74fe28a"},
+  {"type": "export", "package": "Rsamtools", "key": "class:ApplyPileupsParam", "hash": "614f6d9b9a46c60ec2728a5e00a85d0d"},
+  ...
+  {"type": "import", "package": "S4Vectors", "key": "class:Vector", "hash": "10ab26d37b3e0ebc9fdf82fbfee25632"},
   ...
 ]
 ```
 
-`abi_check()` compares a stored record with the current fingerprints of the
-dependencies, and returns the reasons for a rebuild (zero rows means no rebuild
-is needed). For example, if a slot was added to the `Vector` class:
+A package needs to be rebuilt when one of its imports no longer matches the
+current export of the dependency. `abi_check()` compares the stored output of
+`abiprint()` with the current exports of the dependencies, and returns the
+reasons for a rebuild (zero rows means no rebuild is needed). For example, if a
+slot was added to the `Vector` class:
 
 ```r
-abi_check(record)
+abi_check(x)
 #>     package                 reason
 #>   S4Vectors S4 class Vector changed
 ```
 
-Fingerprints are computed from the installed dependencies by default, or can be
-supplied by the caller as a data frame with the combined rows of
-`abi_fingerprint()`, e.g. from the API of a package repository.
+The current exports are computed from the installed dependencies by default,
+or can be supplied by the caller, e.g. from the API of a package repository.
 
-For a local library without records, `stale_classes()` compares the S4 class
+For a local library without stored imports, `stale_classes()` compares the S4 class
 definitions stored in an installed package with the current definitions of
 their superclasses, to find packages that must be reinstalled after a
 dependency was updated.
 
 ## Using this in a package repository
 
-1. When building a package, store `abi_fingerprint()` and `abi_record()`
-   with the binary.
+1. When building a package, store the output of `abiprint()` with the binary.
 2. Periodically (e.g. nightly), run `abi_check()` for each package against the
-   latest fingerprints of its dependencies, and rebuild the ones with changes.
+   latest exports of its dependencies, and rebuild the ones with changes.
    Checking periodically rather than after every deployment means that a
    package is rebuilt at most once, even if many of its dependencies changed
    on the same day.
-3. A rebuilt package records new fingerprints, and its own class hashes may
+3. A rebuilt package stores new imports and exports, and its own class hashes may
    change because they include the inherited slots. Dependents further down
    are picked up in the next round, so no cascade logic is needed.
 
@@ -159,7 +151,7 @@ times), the fingerprints of the core infrastructure barely changed:
 | DelayedArray | 0.38.2 → 0.39.8   | unchanged    | (none)    |
 
 The only change was the removal of two classes from S4Vectors that no other
-package extends. Because records hold per-class hashes, this would not trigger
+package extends. Because imports are per class, this would not trigger
 any rebuilds. A version-based policy would have rebuilt every dependent of
 all five packages.
 

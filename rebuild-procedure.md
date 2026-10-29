@@ -7,55 +7,59 @@ system that builds binary packages from source.
 
 ## What to store for each build
 
-Run these right after the package has been installed in the build
-environment, using the same library that it was built against:
+Run `abiprint(pkg)` right after the package has been installed in the build
+environment, using the same library that it was built against. It returns the
+ABI exports and imports of the package:
 
-- `abi_fingerprint(pkg)`: the hashes of the S4 classes and C headers of the
-  package itself. Dependents are compared against this.
-- `abi_record(pkg)`: the fingerprints of the parts of its critical
-  dependencies that the package uses.
+- **exports**: the hashes of the S4 classes and C headers of the package
+  itself, and its version. Dependents are compared against these.
+- **imports**: the exports of its critical dependencies that the package
+  copied when it was built: the classes that it extends, and the headers of
+  `C API` dependencies.
 
-Store both with the package metadata. Both are data frames with one row per
-fingerprint, so `jsonlite::toJSON()` gives a flat list of entries that is easy
-to query. For example, part of the record of Rsamtools:
+Store it with the package metadata. It is a flat data frame, so
+`jsonlite::toJSON()` gives a list of entries that is easy to query. For
+example, part of the entries of Rsamtools:
 
 ```js
 _abi: [
-  {package: 'S4Vectors', key: 'class:Vector', hash: '10ab26d3...'},
-  {package: 'S4Vectors', key: 'class:List', hash: '7cded7a2...'},
-  {package: 'S4Vectors', key: 'headers', hash: 'e2fc1251...'},
-  {package: 'S4Vectors', key: 'version', hash: '0.51.10'}
+  {type: 'export', package: 'Rsamtools', key: 'class:BamFile', hash: 'ee6ceb9e...'},
+  {type: 'export', package: 'Rsamtools', key: 'version', hash: '2.29.0'},
+  {type: 'import', package: 'S4Vectors', key: 'class:Vector', hash: '10ab26d3...'},
+  {type: 'import', package: 'S4Vectors', key: 'class:List', hash: '7cded7a2...'},
+  {type: 'import', package: 'S4Vectors', key: 'headers', hash: 'e2fc1251...'},
+  {type: 'import', package: 'S4Vectors', key: 'version', hash: '0.51.10'}
 ]
 ```
 
-The fingerprint of a package always has a `version` entry. The record only has
-one for dependencies without a fingerprint: those of which the package copied
+The exports always include the `version`. The imports only include the
+version of dependencies without a hash: those of which the package copied
 code, or a C API without headers.
 
-Fingerprints from one platform are enough, provided the hashes are identical
+The output from one platform is enough, provided the hashes are identical
 across platforms (not yet verified).
 
 ## After a package is deployed
 
 Suppose a new version of S4Vectors changes the `Vector` and `List` classes.
 
-### 1. Diff the old and new fingerprint
+### 1. Diff the old and new exports
 
-Fetch the fingerprint of the previous build of the package before replacing
-it, and compare it with the new one, per class and for the headers. If
+Fetch the exports of the previous build of the package before replacing it,
+and compare them with the new ones, per class and for the headers. If
 nothing changed, stop. This is the case for most deployments, including
 version bumps without code changes, such as the twice-yearly version bump of
 all Bioconductor packages.
 
 The `version` entry is the exception: if the version changed, dependents that
-recorded a `version` entry are affected as well.
+import the `version` are affected as well.
 
 ### 2. Find the affected dependents
 
-Query the packages that recorded one of the changed keys:
+Query the packages that import one of the changed keys:
 
 ```js
-{_abi: {$elemMatch: {package: 'S4Vectors', key: {$in: ['class:Vector', 'class:List']}}}}
+{_abi: {$elemMatch: {type: 'import', package: 'S4Vectors', key: {$in: ['class:Vector', 'class:List']}}}}
 ```
 
 Packages that only extend other classes of S4Vectors, such as `Rle` or
@@ -88,11 +92,11 @@ Rebuilds triggered by deployments can be missed:
   triggered.
 - A change that does not affect the hash of subclasses, such as a class
   becoming virtual.
-- Packages that were built before the fingerprints were introduced, or of
+- Packages that were built before abiprint was introduced, or of
   which the trigger was lost.
 
-As a safety net, a nightly job checks each package against the current
-fingerprints of its dependencies (as `abi_check()` does), and rebuilds the
+As a safety net, a nightly job checks the imports of each package against the
+current exports of its dependencies (as `abi_check()` does), and rebuilds the
 packages with differences, again skipping those that depend on another package
 that needs a rebuild.
 
@@ -106,14 +110,14 @@ the number of dependents.
 
 What would need to change:
 
-- **Build**: compute the fingerprint and the record in the build job, and
-  deploy them with the package metadata.
-- **cranlike-server**: store them (e.g. `_abi`), add an index on the record
+- **Build**: run `abiprint()` in the build job, and deploy the result with
+  the package metadata.
+- **cranlike-server**: store it (e.g. `_abi`), add an index on the import
   entries, and an endpoint that returns the affected dependents for a
   package and a list of changed keys.
 - **Deploy workflow**: replace the `version_change` check in
   [`version.sh`](https://github.com/r-universe-org/actions/blob/v12/deploy-packages/version.sh)
-  by the fingerprint diff, and let the `rechecks` job trigger the first layer
+  by the diff of the exports, and let the `rechecks` job trigger the first layer
   of affected dependents. This also makes it possible to enable rebuilds for
   the Bioconductor universes again, see
   [help#740](https://github.com/r-universe-org/help/issues/740).
