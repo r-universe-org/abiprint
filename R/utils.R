@@ -1,13 +1,8 @@
-`%||%` <- function(x, y) if (is.null(x)) y else x
-
 base_packages <- c("base", "compiler", "datasets", "graphics", "grDevices", "grid",
   "methods", "parallel", "splines", "stats", "stats4", "tcltk", "tools", "utils")
 
 md5_text <- function(x){
-  tmp <- tempfile()
-  on.exit(unlink(tmp))
-  writeBin(charToRaw(paste(x, collapse = "\n")), tmp)
-  unname(tools::md5sum(tmp))
+  unname(tools::md5sum(bytes = charToRaw(paste(x, collapse = "\n"))))
 }
 
 read_description <- function(path){
