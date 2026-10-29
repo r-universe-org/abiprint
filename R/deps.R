@@ -32,18 +32,33 @@
 #' critical_deps("stats4")
 critical_deps <- function(pkg, lib.loc = NULL, ignore = "R6"){
   path <- find.package(pkg, lib.loc)
-  desc <- read_description(path)
-  rows <- list()
-  add <- function(package, type, detail = ""){
-    rows[[length(rows) + 1]] <<- data.frame(package = package, type = type, detail = detail)
-  }
-
-  libs <- shared_objects(path)
-  for (dep in parse_deps(desc$LinkingTo)) {
-    add(dep, if (mentions_package(libs, dep)) "C API" else "headers")
-  }
-
   db <- load_rdb(path, pkg)
+  copied <- copied_code(db, pkg, ignore)
+  out <- rbind(
+    linkingto_deps(path),
+    s4_deps(db, pkg, lib.loc),
+    deps_table(names(copied) %||% character(), "copied code", unname(vapply(copied, paste, "", collapse = ", ")))
+  )
+  out <- unique(out)
+  out <- out[order(out$package, out$type, out$detail, method = "radix"), ]
+  row.names(out) <- NULL
+  out
+}
+
+deps_table <- function(package = character(), type = character(), detail = character()){
+  data.frame(package = package, type = rep(type, length.out = length(package)),
+             detail = rep(detail, length.out = length(package)))
+}
+
+linkingto_deps <- function(path){
+  libs <- shared_objects(path)
+  deps <- parse_deps(read_description(path)$LinkingTo)
+  types <- vapply(deps, function(dep) if (mentions_package(libs, dep)) "C API" else "headers", "")
+  deps_table(deps, unname(types), "")
+}
+
+s4_deps <- function(db, pkg, lib.loc){
+  out <- deps_table()
   for (def in class_defs(db)) {
     for (ext in def@contains) {
       dep <- super_package(ext)
@@ -51,20 +66,10 @@ critical_deps <- function(pkg, lib.loc = NULL, ignore = "R6"){
         next
       provider <- provider_class(dep, ext@superClass, lib.loc)
       if (length(provider) && !"oldClass" %in% names(provider@contains))
-        add(dep, "S4 class", as.character(ext@superClass))
+        out <- rbind(out, deps_table(dep, "S4 class", as.character(ext@superClass)))
     }
   }
-
-  copied <- copied_code(db, pkg, ignore)
-  for (dep in names(copied)) {
-    add(dep, "copied code", paste(copied[[dep]], collapse = ", "))
-  }
-
-  out <- do.call(rbind, c(rows, list(data.frame(package = character(), type = character(), detail = character()))))
-  out <- unique(out)
-  out <- out[order(out$package, out$type, out$detail, method = "radix"), ]
-  row.names(out) <- NULL
-  out
+  unique(out)
 }
 
 provider_class <- function(dep, class, lib.loc){

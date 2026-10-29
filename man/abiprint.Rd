@@ -4,20 +4,17 @@
 \alias{abiprint}
 \title{ABI imports and exports of a package}
 \usage{
-abiprint(pkg, lib.loc = NULL, ignore = "R6")
+abiprint(pkg, lib.loc = NULL)
 }
 \arguments{
 \item{pkg}{name of an installed package}
 
 \item{lib.loc}{library to search, defaults to \code{\link[=.libPaths]{.libPaths()}}}
-
-\item{ignore}{namespaces whose code is copied by design, such as the
-generator functions of R6 classes.}
 }
 \value{
-a data frame with columns \code{type} (\code{export} or \code{import}), \code{package}
-(the package that exports it), \code{key} (\verb{class:<name>}, \code{headers} or
-\code{version}) and \code{hash}.
+a list with data frames \code{exports} (columns \code{key} and \code{hash}) and
+\code{imports} (columns \code{package}, \code{key} and \code{hash}). The \code{key} is either
+\verb{class:<name>} or \code{headers}.
 }
 \description{
 Lists the parts of the binary interface of an installed package that matter
@@ -26,22 +23,22 @@ package was built, in the library that it was built with.
 }
 \details{
 The \strong{exports} are the parts of the package that dependents may copy at
-build time: a hash of each S4 class definition, a hash of the C headers in
-its \code{include} directory, and the version. Unlike the version, the hashes
-only change when something relevant changes.
+build time: a hash of each S4 class definition, and a hash of the C headers
+in its \code{include} directory. Unlike the version, these hashes only change
+when something changes that affects dependents.
 
-The \strong{imports} are the exports of its critical dependencies (see
-\code{\link[=critical_deps]{critical_deps()}}) that the package copied when it was built: the classes
-that it extends and the headers of \verb{C API} dependencies. Other classes of
-the dependency are not included, so a change in those does not trigger a
-rebuild. For dependencies without a hash (copied code, or a C API without
-headers), the version is imported instead.
+The \strong{imports} are the exports of its dependencies that the package copied
+when it was built: the classes that it extends, and the headers of \verb{C API}
+dependencies (see \code{\link[=critical_deps]{critical_deps()}}). Other classes of the dependency are
+not included, so a change in those does not trigger a rebuild.
 
 A package needs to be rebuilt when one of its imports no longer matches the
-current export of the dependency, see \code{\link[=abi_check]{abi_check()}}.
+current export of the dependency, see \code{\link[=abi_check]{abi_check()}}. Code that was copied
+from a dependency (such as \code{f <- dep:::g}) has no hash, and is left to
+periodic rebuilds.
 
-The result is a flat data frame, so that \code{\link[jsonlite:toJSON]{jsonlite::toJSON()}} gives a list
-of entries that is easy to store and query in a database.
+The data frames are flat, so that \code{\link[jsonlite:toJSON]{jsonlite::toJSON()}} gives lists of
+entries that are easy to store and query in a database.
 }
 \examples{
 abiprint("stats4")

@@ -1,4 +1,4 @@
-Package: abiprint
+Package: abitools
 Type: Package
 Title: Detect When Installed R Packages Need to be Rebuilt
 Version: 0.1.0

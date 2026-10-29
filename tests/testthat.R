@@ -1,4 +1,4 @@
 library(testthat)
-library(abiprint)
+library(abitools)
 
-test_check("abiprint")
+test_check("abitools")

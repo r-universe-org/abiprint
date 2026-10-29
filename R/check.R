@@ -9,40 +9,37 @@
 #' superclasses in other packages. This finds packages in a local library that
 #' must be reinstalled after a dependency was updated.
 #'
-#' @param x data frame as returned by [abiprint()], possibly read from JSON.
-#' Only the imports are used.
-#' @param exports data frame with the current exports of the dependencies,
-#' e.g. the combined output of [abiprint()] for each of them. Rows with
-#' imports are ignored. If `NULL`, the exports are computed from the installed
-#' packages.
+#' @param x list as returned by [abiprint()], possibly read from JSON. Only
+#' the imports are used.
+#' @param exports named list with the current exports of the dependencies,
+#' e.g. `list(S4Vectors = abiprint("S4Vectors")$exports)`. If `NULL`, they are
+#' computed from the installed packages.
 #' @inheritParams critical_deps
 #' @return a data frame with the dependency and reason for each change
 #' @export
 #' @rdname check
 abi_check <- function(x, exports = NULL, lib.loc = NULL){
-  imports <- x[x$type == "import", ]
+  imports <- x$imports
   if (is.null(exports)) {
-    exports <- do.call(rbind, c(list(abi_table()), lapply(unique(imports$package), function(dep){
+    deps <- unique(imports$package)
+    exports <- lapply(deps, function(dep){
       tryCatch(abi_exports(dep, lib.loc), error = function(e) NULL)
-    })))
+    })
+    names(exports) <- deps
   }
-  exports <- exports[exports$type == "export", ]
   out <- data.frame(package = character(), reason = character())
   for (i in seq_len(nrow(imports))) {
     dep <- imports$package[i]
     key <- imports$key[i]
-    old <- imports$hash[i]
-    if (!dep %in% exports$package) {
-      reason <- "dependency not found"
-    } else {
-      new <- exports$hash[exports$package == dep & exports$key == key]
-      what <- if (startsWith(key, "class:")) paste("S4 class", sub("^class:", "", key)) else
-        if (key == "headers") "C headers" else key
-      reason <- if (!length(new)) {
-        paste(what, "was removed")
-      } else if (!identical(new, old)) {
-        if (key == "version") sprintf("version changed from %s to %s", old, new) else paste(what, "changed")
-      }
+    current <- exports[[dep]]
+    what <- if (key == "headers") "C headers" else paste("S4 class", sub("^class:", "", key))
+    new <- current$hash[current$key == key]
+    reason <- if (is.null(current)) {
+      "dependency not found"
+    } else if (!length(new)) {
+      paste(what, "was removed")
+    } else if (!identical(new, imports$hash[i])) {
+      paste(what, "changed")
     }
     if (length(reason))
       out[nrow(out) + 1, ] <- list(dep, reason)

@@ -10,13 +10,12 @@ abi_check(x, exports = NULL, lib.loc = NULL)
 stale_classes(pkg, lib.loc = NULL)
 }
 \arguments{
-\item{x}{data frame as returned by \code{\link[=abiprint]{abiprint()}}, possibly read from JSON.
-Only the imports are used.}
+\item{x}{list as returned by \code{\link[=abiprint]{abiprint()}}, possibly read from JSON. Only
+the imports are used.}
 
-\item{exports}{data frame with the current exports of the dependencies,
-e.g. the combined output of \code{\link[=abiprint]{abiprint()}} for each of them. Rows with
-imports are ignored. If \code{NULL}, the exports are computed from the installed
-packages.}
+\item{exports}{named list with the current exports of the dependencies,
+e.g. \code{list(S4Vectors = abiprint("S4Vectors")$exports)}. If \code{NULL}, they are
+computed from the installed packages.}
 
 \item{lib.loc}{library to search, defaults to \code{\link[=.libPaths]{.libPaths()}}}
 

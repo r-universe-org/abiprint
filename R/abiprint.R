@@ -5,62 +5,61 @@
 #' package was built, in the library that it was built with.
 #'
 #' The **exports** are the parts of the package that dependents may copy at
-#' build time: a hash of each S4 class definition, a hash of the C headers in
-#' its `include` directory, and the version. Unlike the version, the hashes
-#' only change when something relevant changes.
+#' build time: a hash of each S4 class definition, and a hash of the C headers
+#' in its `include` directory. Unlike the version, these hashes only change
+#' when something changes that affects dependents.
 #'
-#' The **imports** are the exports of its critical dependencies (see
-#' [critical_deps()]) that the package copied when it was built: the classes
-#' that it extends and the headers of `C API` dependencies. Other classes of
-#' the dependency are not included, so a change in those does not trigger a
-#' rebuild. For dependencies without a hash (copied code, or a C API without
-#' headers), the version is imported instead.
+#' The **imports** are the exports of its dependencies that the package copied
+#' when it was built: the classes that it extends, and the headers of `C API`
+#' dependencies (see [critical_deps()]). Other classes of the dependency are
+#' not included, so a change in those does not trigger a rebuild.
 #'
 #' A package needs to be rebuilt when one of its imports no longer matches the
-#' current export of the dependency, see [abi_check()].
+#' current export of the dependency, see [abi_check()]. Code that was copied
+#' from a dependency (such as `f <- dep:::g`) has no hash, and is left to
+#' periodic rebuilds.
 #'
-#' The result is a flat data frame, so that [jsonlite::toJSON()] gives a list
-#' of entries that is easy to store and query in a database.
+#' The data frames are flat, so that [jsonlite::toJSON()] gives lists of
+#' entries that are easy to store and query in a database.
 #'
 #' @inheritParams critical_deps
-#' @return a data frame with columns `type` (`export` or `import`), `package`
-#' (the package that exports it), `key` (`class:<name>`, `headers` or
-#' `version`) and `hash`.
+#' @return a list with data frames `exports` (columns `key` and `hash`) and
+#' `imports` (columns `package`, `key` and `hash`). The `key` is either
+#' `class:<name>` or `headers`.
 #' @export
 #' @examples
 #' abiprint("stats4")
-abiprint <- function(pkg, lib.loc = NULL, ignore = "R6"){
-  rbind(abi_exports(pkg, lib.loc), abi_imports(pkg, lib.loc, ignore))
+abiprint <- function(pkg, lib.loc = NULL){
+  list(exports = abi_exports(pkg, lib.loc), imports = abi_imports(pkg, lib.loc))
 }
 
 abi_exports <- function(pkg, lib.loc = NULL){
   path <- find.package(pkg, lib.loc)
-  classes <- vapply(class_defs(load_rdb(path, pkg)), class_hash, "")
-  names(classes) <- paste0("class:", names(classes))
-  hashes <- c(version = read_description(path)$Version, headers = header_hash(path), classes)
-  abi_table("export", pkg, names(hashes), unname(hashes))
+  defs <- class_defs(load_rdb(path, pkg))
+  headers <- header_hash(path)
+  out <- data.frame(
+    key = c(character(), if (length(headers)) "headers", if (length(defs)) paste0("class:", names(defs))),
+    hash = c(character(), headers, vapply(defs, class_hash, "", USE.NAMES = FALSE))
+  )
+  out <- out[order(out$key, method = "radix"), ]
+  row.names(out) <- NULL
+  out
 }
 
-abi_imports <- function(pkg, lib.loc = NULL, ignore = "R6"){
-  deps <- critical_deps(pkg, lib.loc = lib.loc, ignore = ignore)
+abi_imports <- function(pkg, lib.loc = NULL){
+  path <- find.package(pkg, lib.loc)
+  deps <- rbind(linkingto_deps(path), s4_deps(load_rdb(path, pkg), pkg, lib.loc))
   deps <- deps[deps$type != "headers", ]
-  out <- abi_table()
+  out <- data.frame(package = character(), key = character(), hash = character())
   for (dep in unique(deps$package)) {
     rows <- deps[deps$package == dep, ]
     wanted <- paste0("class:", rows$detail[rows$type == "S4 class"])
     if ("C API" %in% rows$type)
       wanted <- c(wanted, "headers")
     exports <- abi_exports(dep, lib.loc)
-    # Without a hash, fall back to the version of the dependency
-    if ("copied code" %in% rows$type || ("C API" %in% rows$type && !"headers" %in% exports$key))
-      wanted <- c(wanted, "version")
-    out <- rbind(out, exports[exports$key %in% wanted, ])
+    exports <- exports[exports$key %in% wanted, ]
+    out <- rbind(out, data.frame(package = rep(dep, nrow(exports)), key = exports$key, hash = exports$hash))
   }
-  abi_table("import", out$package, out$key, out$hash)
-}
-
-abi_table <- function(type = character(), package = character(), key = character(), hash = character()){
-  out <- data.frame(type = rep(type, length.out = length(package)), package = package, key = key, hash = hash)
   out <- out[order(out$package, out$key, method = "radix"), ]
   row.names(out) <- NULL
   out
