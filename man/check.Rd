@@ -10,11 +10,11 @@ abi_check(x, exports = NULL, lib.loc = NULL)
 stale_classes(pkg, lib.loc = NULL)
 }
 \arguments{
-\item{x}{list as returned by \code{\link[=abiprint]{abiprint()}}, possibly read from JSON. Only
+\item{x}{list as returned by \code{\link[=abi_list]{abi_list()}}, possibly read from JSON. Only
 the imports are used.}
 
 \item{exports}{data frame with the current exports of the dependencies,
-e.g. the combined \code{exports} of \code{\link[=abiprint]{abiprint()}} for each of them. If \code{NULL},
+e.g. the combined \code{exports} of \code{\link[=abi_list]{abi_list()}} for each of them. If \code{NULL},
 they are computed from the installed packages.}
 
 \item{lib.loc}{library to search, defaults to \code{\link[=.libPaths]{.libPaths()}}}
@@ -26,7 +26,7 @@ a data frame with the dependency and reason for each change
 }
 \description{
 \code{abi_check()} compares the ABI imports of a package, as stored when it was
-built (see \code{\link[=abiprint]{abiprint()}}), with the current ABI exports of its
+built (see \code{\link[=abi_list]{abi_list()}}), with the current ABI exports of its
 dependencies. The package needs to be rebuilt if the result has any rows.
 }
 \details{

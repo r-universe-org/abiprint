@@ -29,8 +29,8 @@
 #' @return a data frame with columns `package`, `type` and `detail`
 #' @export
 #' @examples
-#' critical_deps("stats4")
-critical_deps <- function(pkg, lib.loc = NULL, ignore = "R6"){
+#' abi_deps("stats4")
+abi_deps <- function(pkg, lib.loc = NULL, ignore = "R6"){
   path <- find.package(pkg, lib.loc)
   db <- load_rdb(path, pkg)
   copied <- copied_code(db, pkg, ignore)

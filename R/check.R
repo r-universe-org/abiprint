@@ -1,7 +1,7 @@
 #' Check if a package needs to be rebuilt
 #'
 #' `abi_check()` compares the ABI imports of a package, as stored when it was
-#' built (see [abiprint()]), with the current ABI exports of its
+#' built (see [abi_list()]), with the current ABI exports of its
 #' dependencies. The package needs to be rebuilt if the result has any rows.
 #'
 #' `stale_classes()` needs no stored imports: it compares the S4 class
@@ -9,12 +9,12 @@
 #' superclasses in other packages. This finds packages in a local library that
 #' must be reinstalled after a dependency was updated.
 #'
-#' @param x list as returned by [abiprint()], possibly read from JSON. Only
+#' @param x list as returned by [abi_list()], possibly read from JSON. Only
 #' the imports are used.
 #' @param exports data frame with the current exports of the dependencies,
-#' e.g. the combined `exports` of [abiprint()] for each of them. If `NULL`,
+#' e.g. the combined `exports` of [abi_list()] for each of them. If `NULL`,
 #' they are computed from the installed packages.
-#' @inheritParams critical_deps
+#' @inheritParams abi_deps
 #' @return a data frame with the dependency and reason for each change
 #' @export
 #' @rdname check

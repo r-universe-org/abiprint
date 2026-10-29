@@ -11,7 +11,7 @@
 #'
 #' The **imports** are the exports of its dependencies that the package copied
 #' when it was built: the classes that it extends, and the headers of `C API`
-#' dependencies (see [critical_deps()]). Other classes of the dependency are
+#' dependencies (see [abi_deps()]). Other classes of the dependency are
 #' not included, so a change in those does not trigger a rebuild.
 #'
 #' A package needs to be rebuilt when one of its imports no longer matches the
@@ -22,15 +22,15 @@
 #' The data frames are flat, so that [jsonlite::toJSON()] gives lists of
 #' entries that are easy to store and query in a database.
 #'
-#' @inheritParams critical_deps
+#' @inheritParams abi_deps
 #' @return a list with data frames `exports` and `imports`, both with columns
 #' `key` and `hash`. The key is `<package>::<class>` for an S4 class, or
 #' `<package>/include` for the C headers. Package names cannot contain `:` or
 #' `/`, so the package is everything before the first `::` or `/`.
 #' @export
 #' @examples
-#' abiprint("stats4")
-abiprint <- function(pkg, lib.loc = NULL){
+#' abi_list("stats4")
+abi_list <- function(pkg, lib.loc = NULL){
   list(exports = abi_exports(pkg, lib.loc), imports = abi_imports(pkg, lib.loc))
 }
 

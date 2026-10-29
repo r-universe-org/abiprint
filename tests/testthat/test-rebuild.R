@@ -9,16 +9,16 @@ test_that("a version bump without changes does not require a rebuild", {
   install_pkg(make_consumer(root), lib)
 
   with_lib(lib, {
-    deps <- critical_deps("conspkg")
+    deps <- abi_deps("conspkg")
     expect_equal(deps$package, rep("provpkg", 3))
     expect_equal(deps$type, c("S4 class", "copied code", "headers"))
     expect_equal(deps$detail, c("Base", "plus_one", ""))
 
-    record <- abiprint("conspkg")
+    record <- abi_list("conspkg")
     expect_equal(record$exports$key, "conspkg::Derived")
     expect_equal(record$imports$key, "provpkg::Base")
     expect_equal(nrow(abi_check(record)), 0)
-    fp1 <- abiprint("provpkg")
+    fp1 <- abi_list("provpkg")
     expect_equal(fp1$exports$key, c("provpkg/include", "provpkg::Base", "provpkg::Other"))
     expect_equal(fp1$exports[2, ], record$imports, ignore_attr = TRUE)
     expect_equal(nrow(fp1$imports), 0)
@@ -27,7 +27,7 @@ test_that("a version bump without changes does not require a rebuild", {
   # Same code, new version: nothing changed
   install_pkg(make_provider(root, "1.1"), lib)
   with_lib(lib, {
-    expect_equal(abiprint("provpkg"), fp1)
+    expect_equal(abi_list("provpkg"), fp1)
     expect_equal(nrow(abi_check(record)), 0)
     expect_equal(nrow(stale_classes("conspkg")), 0)
   })
@@ -42,7 +42,7 @@ test_that("a changed superclass requires a rebuild", {
 
   install_pkg(make_provider(root, "1.0"), lib)
   install_pkg(make_consumer(root), lib)
-  record <- with_lib(lib, abiprint("conspkg"))
+  record <- with_lib(lib, abi_list("conspkg"))
 
   install_pkg(make_provider(root, "1.0", slots = 'representation(x = "numeric", z = "integer")',
                             header = "#define PROV 2"), lib)
@@ -58,7 +58,7 @@ test_that("a changed superclass requires a rebuild", {
 })
 
 test_that("packages without classes or headers have no exports", {
-  x <- abiprint("tools")
+  x <- abi_list("tools")
   expect_equal(names(x$exports), c("key", "hash"))
   expect_equal(nrow(x$exports), 0)
   expect_equal(nrow(x$imports), 0)

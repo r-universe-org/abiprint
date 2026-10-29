@@ -7,7 +7,7 @@ system that builds binary packages from source.
 
 ## What to store for each build
 
-Run `abiprint(pkg)` right after the package has been installed in the build
+Run `abi_list(pkg)` right after the package has been installed in the build
 environment, using the same library that it was built against. It returns the
 ABI exports and imports of the package:
 
@@ -118,7 +118,7 @@ the number of dependents.
 
 What would need to change:
 
-- **Build**: run `abiprint()` in the build job, and deploy the result with
+- **Build**: run `abi_list()` in the build job, and deploy the result with
   the package metadata.
 - **cranlike-server**: store it (e.g. `_abi`), add an index on
   `_abi.imports.key`, and an endpoint that returns the affected dependents

@@ -35,7 +35,7 @@ that is copied by value when the package is installed:
 3. **Copied code.** Objects created at install time that hold functions or
    environments of another package, such as `f <- dep:::helper`, ggproto
    objects inheriting from ggplot2, or S7 classes. These are reported by
-   `critical_deps()`, but not fingerprinted: they are usually small aliases
+   `abi_deps()`, but not fingerprinted: they are usually small aliases
    of internal helpers that keep working, and are left to periodic rebuilds.
 
 Methods for generics from other packages (e.g. BiocGenerics) are registered
@@ -43,11 +43,11 @@ when the package is loaded and are not considered critical.
 
 ## Usage
 
-`critical_deps()` lists the dependencies that an installed package holds a
+`abi_deps()` lists the dependencies that an installed package holds a
 copy of:
 
 ```r
-critical_deps("Rsamtools")
+abi_deps("Rsamtools")
 #>     package        type           detail
 #>  Biostrings       C API
 #>     IRanges       C API
@@ -64,7 +64,7 @@ A `LinkingTo` dependency is classified as `C API` if its name appears as a
 string in the shared library of the package (which is how `R_GetCCallable()`
 refers to it), and as `headers` otherwise.
 
-`abiprint()` lists the ABI **exports** and **imports** of a package. The
+`abi_list()` lists the ABI **exports** and **imports** of a package. The
 exports are the parts that dependents may copy: a hash of each S4 class
 definition (slots, superclasses, virtual) and of the files in its `include`
 directory. Unlike the version, these hashes only change when something changes
@@ -73,7 +73,7 @@ dependencies that the package copied when it was built: the classes that it
 extends, and the headers of `C API` dependencies.
 
 ```r
-abiprint("Rsamtools")
+abi_list("Rsamtools")
 #> $exports
 #>                            key                             hash
 #> 1 Rsamtools::ApplyPileupsParam 614f6d9b9a46c60ec2728a5e00a85d0d
@@ -119,7 +119,7 @@ of entries that are easy to store and query in a database:
 
 A package needs to be rebuilt when one of its imports no longer matches the
 current export of the dependency. `abi_check()` compares the stored output of
-`abiprint()` with the current exports of the dependencies, and returns the
+`abi_list()` with the current exports of the dependencies, and returns the
 reasons for a rebuild (zero rows means no rebuild is needed). For example, if a
 slot was added to the `Vector` class:
 
@@ -140,7 +140,7 @@ dependency was updated.
 
 ## Using this in a package repository
 
-1. When building a package, store the output of `abiprint()` with the binary.
+1. When building a package, store the output of `abi_list()` with the binary.
 2. Periodically (e.g. nightly), run `abi_check()` for each package against the
    latest exports of its dependencies, and rebuild the ones with changes.
    Checking periodically rather than after every deployment means that a
@@ -188,5 +188,5 @@ Inspecting a package takes 0 to 2.5 seconds.
   detected.
 - Copied code is not fingerprinted, so a change in a copied function does not
   trigger a rebuild. Objects copied by design, such as the generator functions
-  of R6 classes, are not reported by `critical_deps()`.
+  of R6 classes, are not reported by `abi_deps()`.
 - Hashes have not yet been verified to be identical across platforms.
