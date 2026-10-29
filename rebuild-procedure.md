@@ -24,17 +24,21 @@ example, part of the output for Rsamtools:
 ```js
 _abi: {
   exports: [
-    {key: 'class:BamFile', hash: 'ee6ceb9e...'},
+    {key: 'Rsamtools::BamFile', hash: 'ee6ceb9e...'},
     ...
   ],
   imports: [
-    {package: 'S4Vectors', key: 'class:Vector', hash: '10ab26d3...'},
-    {package: 'S4Vectors', key: 'class:List', hash: '7cded7a2...'},
-    {package: 'S4Vectors', key: 'headers', hash: 'e2fc1251...'},
+    {key: 'S4Vectors/include', hash: 'e2fc1251...'},
+    {key: 'S4Vectors::List', hash: '7cded7a2...'},
+    {key: 'S4Vectors::Vector', hash: '10ab26d3...'},
     ...
   ]
 }
 ```
+
+The key is `<package>::<class>` for an S4 class, and `<package>/include` for
+the C headers. An import is identical to the export it was copied from, as
+long as that has not changed.
 
 Version numbers are not used: most version bumps do not change anything that
 dependents copy. Code that a package copied from a dependency (such as
@@ -63,7 +67,7 @@ all Bioconductor packages.
 Query the packages that import one of the changed keys:
 
 ```js
-{'_abi.imports': {$elemMatch: {package: 'S4Vectors', key: {$in: ['class:Vector', 'class:List']}}}}
+{'_abi.imports.key': {$in: ['S4Vectors::Vector', 'S4Vectors::List']}}
 ```
 
 Packages that only extend other classes of S4Vectors, such as `Rle` or
@@ -117,8 +121,8 @@ What would need to change:
 - **Build**: run `abiprint()` in the build job, and deploy the result with
   the package metadata.
 - **cranlike-server**: store it (e.g. `_abi`), add an index on
-  `_abi.imports`, and an endpoint that returns the affected dependents for a
-  package and a list of changed keys.
+  `_abi.imports.key`, and an endpoint that returns the affected dependents
+  for a list of changed keys.
 - **Deploy workflow**: replace the `version_change` check in
   [`version.sh`](https://github.com/r-universe-org/actions/blob/v12/deploy-packages/version.sh)
   by the diff of the exports, and let the `rechecks` job trigger the first layer

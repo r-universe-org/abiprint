@@ -13,9 +13,9 @@ stale_classes(pkg, lib.loc = NULL)
 \item{x}{list as returned by \code{\link[=abiprint]{abiprint()}}, possibly read from JSON. Only
 the imports are used.}
 
-\item{exports}{named list with the current exports of the dependencies,
-e.g. \code{list(S4Vectors = abiprint("S4Vectors")$exports)}. If \code{NULL}, they are
-computed from the installed packages.}
+\item{exports}{data frame with the current exports of the dependencies,
+e.g. the combined \code{exports} of \code{\link[=abiprint]{abiprint()}} for each of them. If \code{NULL},
+they are computed from the installed packages.}
 
 \item{lib.loc}{library to search, defaults to \code{\link[=.libPaths]{.libPaths()}}}
 

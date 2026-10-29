@@ -23,9 +23,10 @@
 #' entries that are easy to store and query in a database.
 #'
 #' @inheritParams critical_deps
-#' @return a list with data frames `exports` (columns `key` and `hash`) and
-#' `imports` (columns `package`, `key` and `hash`). The `key` is either
-#' `class:<name>` or `headers`.
+#' @return a list with data frames `exports` and `imports`, both with columns
+#' `key` and `hash`. The key is `<package>::<class>` for an S4 class, or
+#' `<package>/include` for the C headers. Package names cannot contain `:` or
+#' `/`, so the package is everything before the first `::` or `/`.
 #' @export
 #' @examples
 #' abiprint("stats4")
@@ -37,32 +38,38 @@ abi_exports <- function(pkg, lib.loc = NULL){
   path <- find.package(pkg, lib.loc)
   defs <- class_defs(load_rdb(path, pkg))
   headers <- header_hash(path)
-  out <- data.frame(
-    key = c(character(), if (length(headers)) "headers", if (length(defs)) paste0("class:", names(defs))),
-    hash = c(character(), headers, vapply(defs, class_hash, "", USE.NAMES = FALSE))
+  abi_table(
+    key = c(if (length(headers)) paste0(pkg, "/include"), if (length(defs)) paste0(pkg, "::", names(defs))),
+    hash = c(headers, vapply(defs, class_hash, "", USE.NAMES = FALSE))
   )
-  out <- out[order(out$key, method = "radix"), ]
-  row.names(out) <- NULL
-  out
 }
 
 abi_imports <- function(pkg, lib.loc = NULL){
   path <- find.package(pkg, lib.loc)
   deps <- rbind(linkingto_deps(path), s4_deps(load_rdb(path, pkg), pkg, lib.loc))
   deps <- deps[deps$type != "headers", ]
-  out <- data.frame(package = character(), key = character(), hash = character())
+  out <- abi_table()
   for (dep in unique(deps$package)) {
     rows <- deps[deps$package == dep, ]
-    wanted <- paste0("class:", rows$detail[rows$type == "S4 class"])
+    wanted <- paste0(dep, "::", rows$detail[rows$type == "S4 class"])
     if ("C API" %in% rows$type)
-      wanted <- c(wanted, "headers")
+      wanted <- c(wanted, paste0(dep, "/include"))
     exports <- abi_exports(dep, lib.loc)
-    exports <- exports[exports$key %in% wanted, ]
-    out <- rbind(out, data.frame(package = rep(dep, nrow(exports)), key = exports$key, hash = exports$hash))
+    out <- rbind(out, exports[exports$key %in% wanted, ])
   }
-  out <- out[order(out$package, out$key, method = "radix"), ]
+  abi_table(out$key, out$hash)
+}
+
+abi_table <- function(key = character(), hash = character()){
+  out <- data.frame(key = c(character(), key), hash = c(character(), hash))
+  out <- out[order(out$key, method = "radix"), ]
   row.names(out) <- NULL
   out
+}
+
+# Package names cannot contain ':' or '/'
+key_package <- function(key){
+  sub("(::|/).*$", "", key)
 }
 
 # The slots include the inherited ones, so a change in any of the

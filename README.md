@@ -75,24 +75,30 @@ extends, and the headers of `C API` dependencies.
 ```r
 abiprint("Rsamtools")
 #> $exports
-#>                        key                             hash
-#> 1  class:ApplyPileupsParam 614f6d9b9a46c60ec2728a5e00a85d0d
-#> 2            class:BamFile ee6ceb9eb98d7600984ba1d3c68a9288
+#>                            key                             hash
+#> 1 Rsamtools::ApplyPileupsParam 614f6d9b9a46c60ec2728a5e00a85d0d
+#> 2           Rsamtools::BamFile ee6ceb9eb98d7600984ba1d3c68a9288
 #> ...
 #>
 #> $imports
-#>       package                    key                             hash
-#> 1  Biostrings                headers dce746f9584e23b1fd191f87d0bb21c5
-#> 2     IRanges                headers 8b347f47098d58de136577ff44f8f7c0
-#> 3   S4Vectors        class:Annotated 95bf8c6a9de4f2f9373d24ccc74fe28a
-#> 4   S4Vectors             class:List 7cded7a2c2addcb2a2d3392a89042c1e
-#> 5   S4Vectors       class:SimpleList 0857578da91dd860b1c84fbffb582a79
-#> 6   S4Vectors           class:Vector 10ab26d37b3e0ebc9fdf82fbfee25632
-#> 7   S4Vectors     class:list_OR_List d8ee15be3bab82ef301792952f2d7259
-#> 8   S4Vectors class:vector_OR_Vector d1d36135046af6ee3cce1f81922f3392
-#> 9   S4Vectors                headers e2fc12515bdb6bc9b5b51ed7bcc79378
-#> 10    XVector                headers 3e1b8282380e0e124f309ebac42e49c5
+#>                            key                             hash
+#> 1           Biostrings/include dce746f9584e23b1fd191f87d0bb21c5
+#> 2              IRanges/include 8b347f47098d58de136577ff44f8f7c0
+#> 3            S4Vectors/include e2fc12515bdb6bc9b5b51ed7bcc79378
+#> 4         S4Vectors::Annotated 95bf8c6a9de4f2f9373d24ccc74fe28a
+#> 5              S4Vectors::List 7cded7a2c2addcb2a2d3392a89042c1e
+#> 6        S4Vectors::SimpleList 0857578da91dd860b1c84fbffb582a79
+#> 7            S4Vectors::Vector 10ab26d37b3e0ebc9fdf82fbfee25632
+#> 8      S4Vectors::list_OR_List d8ee15be3bab82ef301792952f2d7259
+#> 9  S4Vectors::vector_OR_Vector d1d36135046af6ee3cce1f81922f3392
+#> 10             XVector/include 3e1b8282380e0e124f309ebac42e49c5
 ```
+
+The key is `<package>::<class>` for an S4 class, and `<package>/include` for
+the C headers. Because package names cannot contain `:` or `/`, the package is
+always the part before the first `::` or `/`. An import is identical to the
+export of the dependency that it was copied from, as long as that has not
+changed.
 
 This should be run right after the package is built, in the library that it
 was built with. Both data frames are flat, so `jsonlite::toJSON()` gives lists
@@ -101,11 +107,11 @@ of entries that are easy to store and query in a database:
 ```json
 {
   "exports": [
-    {"key": "class:ApplyPileupsParam", "hash": "614f6d9b9a46c60ec2728a5e00a85d0d"},
+    {"key": "Rsamtools::ApplyPileupsParam", "hash": "614f6d9b9a46c60ec2728a5e00a85d0d"},
     ...
   ],
   "imports": [
-    {"package": "S4Vectors", "key": "class:Vector", "hash": "10ab26d37b3e0ebc9fdf82fbfee25632"},
+    {"key": "S4Vectors::Vector", "hash": "10ab26d37b3e0ebc9fdf82fbfee25632"},
     ...
   ]
 }
@@ -124,9 +130,8 @@ abi_check(x)
 ```
 
 The current exports are computed from the installed dependencies by default,
-or can be supplied by the caller as a named list, e.g.
-`list(S4Vectors = exports)` with the exports from the API of a package
-repository.
+or can be supplied by the caller as a data frame with the combined exports of
+the dependencies, e.g. from the API of a package repository.
 
 For a local library without stored imports, `stale_classes()` compares the S4 class
 definitions stored in an installed package with the current definitions of

@@ -12,9 +12,10 @@ abiprint(pkg, lib.loc = NULL)
 \item{lib.loc}{library to search, defaults to \code{\link[=.libPaths]{.libPaths()}}}
 }
 \value{
-a list with data frames \code{exports} (columns \code{key} and \code{hash}) and
-\code{imports} (columns \code{package}, \code{key} and \code{hash}). The \code{key} is either
-\verb{class:<name>} or \code{headers}.
+a list with data frames \code{exports} and \code{imports}, both with columns
+\code{key} and \code{hash}. The key is \verb{<package>::<class>} for an S4 class, or
+\verb{<package>/include} for the C headers. Package names cannot contain \code{:} or
+\code{/}, so the package is everything before the first \code{::} or \code{/}.
 }
 \description{
 Lists the parts of the binary interface of an installed package that matter

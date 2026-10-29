@@ -15,12 +15,12 @@ test_that("a version bump without changes does not require a rebuild", {
     expect_equal(deps$detail, c("Base", "plus_one", ""))
 
     record <- abiprint("conspkg")
-    expect_equal(record$exports$key, "class:Derived")
-    expect_equal(record$imports$package, "provpkg")
-    expect_equal(record$imports$key, "class:Base")
+    expect_equal(record$exports$key, "conspkg::Derived")
+    expect_equal(record$imports$key, "provpkg::Base")
     expect_equal(nrow(abi_check(record)), 0)
     fp1 <- abiprint("provpkg")
-    expect_equal(fp1$exports$key, c("class:Base", "class:Other", "headers"))
+    expect_equal(fp1$exports$key, c("provpkg/include", "provpkg::Base", "provpkg::Other"))
+    expect_equal(fp1$exports[2, ], record$imports, ignore_attr = TRUE)
     expect_equal(nrow(fp1$imports), 0)
   })
 
@@ -54,7 +54,7 @@ test_that("a changed superclass requires a rebuild", {
   })
 
   # Exports can also be supplied by the caller, e.g. from a repository
-  expect_equal(abi_check(record, exports = list())$reason, "dependency not found")
+  expect_equal(abi_check(record, exports = record$exports[0, ])$reason, "dependency not found")
 })
 
 test_that("packages without classes or headers have no exports", {
@@ -68,18 +68,19 @@ test_that("imports and exports are stored as flat lists in JSON", {
   skip_on_cran()
   skip_if_not_installed("jsonlite")
   record <- list(
-    exports = data.frame(key = "class:Ranges", hash = "5f7f937e"),
-    imports = data.frame(package = "S4Vectors", key = c("class:List", "class:Vector"), hash = c("7cded7a2", "10ab26d3"))
+    exports = data.frame(key = "IRanges::Ranges", hash = "5f7f937e"),
+    imports = data.frame(key = c("S4Vectors/include", "S4Vectors::Vector"), hash = c("1be3971f", "10ab26d3"))
   )
   json <- jsonlite::toJSON(record)
-  expect_equal(as.character(json), paste0('{"exports":[{"key":"class:Ranges","hash":"5f7f937e"}],',
-                                          '"imports":[{"package":"S4Vectors","key":"class:List","hash":"7cded7a2"},',
-                                          '{"package":"S4Vectors","key":"class:Vector","hash":"10ab26d3"}]}'))
-  exports <- list(S4Vectors = data.frame(key = c("class:List", "class:Vector"), hash = c("7cded7a2", "10ab26d3")))
+  expect_equal(as.character(json), paste0('{"exports":[{"key":"IRanges::Ranges","hash":"5f7f937e"}],',
+                                          '"imports":[{"key":"S4Vectors/include","hash":"1be3971f"},',
+                                          '{"key":"S4Vectors::Vector","hash":"10ab26d3"}]}'))
+  exports <- data.frame(key = c("S4Vectors/include", "S4Vectors::List", "S4Vectors::Vector"),
+                        hash = c("1be3971f", "7cded7a2", "10ab26d3"))
   expect_equal(nrow(abi_check(jsonlite::fromJSON(json), exports = exports)), 0)
-  exports$S4Vectors$hash[2] <- "changed"
+  exports$hash[3] <- "changed"
   expect_equal(abi_check(jsonlite::fromJSON(json), exports = exports)$reason, "S4 class Vector changed")
-  exports$S4Vectors <- exports$S4Vectors[2, ]
-  expect_equal(abi_check(jsonlite::fromJSON(json), exports = exports)$reason,
-               c("S4 class List was removed", "S4 class Vector changed"))
+  check <- abi_check(jsonlite::fromJSON(json), exports = exports[2:3, ])
+  expect_equal(check$package, c("S4Vectors", "S4Vectors"))
+  expect_equal(check$reason, c("C headers removed", "S4 class Vector changed"))
 })

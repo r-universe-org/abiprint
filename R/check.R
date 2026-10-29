@@ -11,9 +11,9 @@
 #'
 #' @param x list as returned by [abiprint()], possibly read from JSON. Only
 #' the imports are used.
-#' @param exports named list with the current exports of the dependencies,
-#' e.g. `list(S4Vectors = abiprint("S4Vectors")$exports)`. If `NULL`, they are
-#' computed from the installed packages.
+#' @param exports data frame with the current exports of the dependencies,
+#' e.g. the combined `exports` of [abiprint()] for each of them. If `NULL`,
+#' they are computed from the installed packages.
 #' @inheritParams critical_deps
 #' @return a data frame with the dependency and reason for each change
 #' @export
@@ -21,23 +21,20 @@
 abi_check <- function(x, exports = NULL, lib.loc = NULL){
   imports <- x$imports
   if (is.null(exports)) {
-    deps <- unique(imports$package)
-    exports <- lapply(deps, function(dep){
+    exports <- do.call(rbind, c(list(abi_table()), lapply(unique(key_package(imports$key)), function(dep){
       tryCatch(abi_exports(dep, lib.loc), error = function(e) NULL)
-    })
-    names(exports) <- deps
+    })))
   }
   out <- data.frame(package = character(), reason = character())
   for (i in seq_len(nrow(imports))) {
-    dep <- imports$package[i]
     key <- imports$key[i]
-    current <- exports[[dep]]
-    what <- if (key == "headers") "C headers" else paste("S4 class", sub("^class:", "", key))
-    new <- current$hash[current$key == key]
-    reason <- if (is.null(current)) {
+    dep <- key_package(key)
+    what <- if (grepl("::", key, fixed = TRUE)) paste("S4 class", sub("^[^:]*::", "", key)) else "C headers"
+    new <- exports$hash[exports$key == key]
+    reason <- if (!dep %in% key_package(exports$key)) {
       "dependency not found"
     } else if (!length(new)) {
-      paste(what, "was removed")
+      paste(what, "removed")
     } else if (!identical(new, imports$hash[i])) {
       paste(what, "changed")
     }
