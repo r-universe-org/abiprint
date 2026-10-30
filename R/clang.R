@@ -105,7 +105,7 @@ clang_pairs <- function(commands, own, dirs){
     tryCatch(system2("xcrun", "--show-sdk-path", stdout = TRUE, stderr = FALSE), error = function(e) NULL)
   }
   # Files are parsed in parallel (each in a forked process on unix)
-  cores <- getOption("abitools.cores", parallel::detectCores())
+  cores <- parse_cores()
   out <- parallel::mclapply(commands, function(cmd){
     if (!file.exists(cmd$file))
       return(NULL)
@@ -132,4 +132,12 @@ pick_signatures <- function(pairs, names){
     }
     NA_character_
   }, "", USE.NAMES = FALSE)
+}
+
+# The number of processes to parse files with: the option abitools.cores, or
+# mc.cores, or all cores. R CMD check (--as-cran) allows at most 2.
+parse_cores <- function(){
+  limit <- tolower(Sys.getenv("_R_CHECK_LIMIT_CORES_", "false"))
+  cores <- getOption("abitools.cores", getOption("mc.cores", parallel::detectCores()))
+  if (!limit %in% c("false", "")) min(cores, 2L) else cores
 }
