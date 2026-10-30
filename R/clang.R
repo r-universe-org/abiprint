@@ -101,22 +101,23 @@ clang_args <- function(args, dir){
 # be in a file that is included by another one (unity builds), and tables of
 # functions may be in a different file than the loop that registers them.
 clang_pairs <- function(commands, own, dirs){
-  out <- list()
-  for (cmd in commands) {
+  sdk <- if (Sys.info()[["sysname"]] == "Darwin") {
+    tryCatch(system2("xcrun", "--show-sdk-path", stdout = TRUE, stderr = FALSE), error = function(e) NULL)
+  }
+  # Files are parsed in parallel (each in a forked process on unix)
+  cores <- getOption("abitools.cores", parallel::detectCores())
+  out <- parallel::mclapply(commands, function(cmd){
     if (!file.exists(cmd$file))
-      next
+      return(NULL)
     lang <- if (grepl("\\.c$", cmd$file)) "c" else "c++"
     args <- c("-x", lang, "-resource-dir", clang_resource_dir(), cmd$args, "-w")
-    if (Sys.info()[["sysname"]] == "Darwin" && !"-isysroot" %in% args) {
-      sdk <- tryCatch(system2("xcrun", "--show-sdk-path", stdout = TRUE, stderr = FALSE), error = function(e) NULL)
-      if (length(sdk))
-        args <- c(args, "-isysroot", sdk)
-    }
+    if (length(sdk) && !"-isysroot" %in% args)
+      args <- c(args, "-isysroot", sdk)
     res <- .Call(abitools_clang_pairs, cmd$file, args, own, dirs)
     # Only files without errors: with errors, clang may substitute int for types
     if (length(res) && res[[4]] == 0)
-      out[[length(out) + 1]] <- data.frame(name = res[[1]], kind = res[[2]], sig = res[[3]])
-  }
+      data.frame(name = res[[1]], kind = res[[2]], sig = res[[3]])
+  }, mc.cores = if (.Platform$OS.type == "windows") 1L else cores)
   do.call(rbind, c(list(data.frame(name = character(), kind = character(), sig = character())), out))
 }
 
