@@ -69,16 +69,18 @@ indirect ones (as stored in the class definition by R). `<package>` is the
 
 The C functions of a package are recorded when it is installed from source,
 because this requires its source files and the compiler flags it was built
-with. Packages that were installed otherwise have no C function exports.
+with (from the output of `R CMD INSTALL`). Packages that were installed
+otherwise have no C function exports.
 
 ### 4.1 Compile commands
 
-The package is installed with `R CMD INSTALL`, with the C and C++ compilers
-(`CC`, `CXX`, `CXX11`, ..., `CXX23`) wrapped by a program that logs the working
-directory and the arguments of each command. A compile command is a logged
-command with the argument `-c` and exactly one argument with extension `.c`,
-`.cc`, `.cpp`, `.cxx` or `.C` (the source file, relative to the working
-directory).
+The package is installed with `R CMD INSTALL`, which prints the compile
+commands. A compile command is a line of this output that, split into words as
+by a POSIX shell, contains the argument `-c` and exactly one argument with
+extension `.c`, `.cc`, `.cpp`, `.cxx` or `.C` (the source file). Commands run
+in the `src` directory of the package, or in the directory that make reports
+when it enters another one (`make[n]: Entering directory '...'`, until the
+matching `Leaving directory`).
 
 ### 4.2 Parsing
 
@@ -266,8 +268,9 @@ matter.
 
 - Objects in a package that hold code of a dependency (e.g. `f <- dep:::g`)
   are reported by `abi_deps()` but not hashed.
-- C functions of packages that were not installed with the compile commands
-  logged (section 4.1) are not exported, so dependents do not import them.
+- C functions of packages that were installed without recording them (section
+  4) are not exported, so dependents do not import them. Compile commands
+  that are not printed by make (e.g. `@$(CC) ...`) are not found.
 - C functions that are registered with a name that is computed at runtime
   (not a string literal next to the function) are not exported.
 - Signatures depend on the platform ABI (sizes and alignments), and C++ types

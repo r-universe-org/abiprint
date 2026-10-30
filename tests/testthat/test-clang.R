@@ -73,3 +73,19 @@ test_that("names, formatting and qualifiers do not matter", {
   expect_equal(a, b)
   expect_equal(a[["move"]], "function(*{16,8|0:Int32;64:Float64;},Int32)->*record#1")
 })
+
+test_that("compile commands are found in the output of R CMD INSTALL", {
+  words <- abitools:::shell_words("g++ -I\"/usr/share/R/include\" -I'/a b/inc' -I. -DX=\\\"y\\\" -c 'dir/f.cpp' -o f.o")
+  expect_equal(words, c("g++", "-I/usr/share/R/include", "-I/a b/inc", "-I.", "-DX=\"y\"", "-c", "dir/f.cpp", "-o", "f.o"))
+  lines <- c("gcc -I. -DN=2 -std=gnu17 -fPIC -O2 -c a.c -o a.o",
+             "make[1]: Entering directory '/build/pkg/src/sub'",
+             "gcc -I../include -c b.c -o b.o",
+             "make[1]: Leaving directory '/build/pkg/src/sub'",
+             "gcc -shared -o pkg.so a.o sub/b.o")
+  cmds <- abitools:::log_commands(lines, "/build/pkg/src")
+  expect_equal(length(cmds), 2)
+  expect_equal(cmds[[1]]$file, normalizePath("/build/pkg/src/a.c", mustWork = FALSE))
+  expect_equal(cmds[[1]]$args, c("-I", "/build/pkg/src/.", "-DN=2", "-std=gnu17"))
+  expect_equal(cmds[[2]]$file, normalizePath("/build/pkg/src/sub/b.c", mustWork = FALSE))
+  expect_equal(cmds[[2]]$args, c("-I", "/build/pkg/src/sub/../include"))
+})
