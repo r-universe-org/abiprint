@@ -71,7 +71,7 @@ make_c_provider <- function(root, version, add_args = "int x, int y", struct = "
 }
 
 # Calls prov_add() from the C API of cprovpkg
-make_c_consumer <- function(root, linkingto = TRUE){
+make_c_consumer <- function(root){
   src <- c("#include <Rinternals.h>", "#include <R_ext/Rdynload.h>",
            "SEXP cons_add(SEXP x, SEXP y){",
            "  static int (*fun)(int, int) = NULL;",
@@ -80,7 +80,7 @@ make_c_consumer <- function(root, linkingto = TRUE){
            "}")
   make_pkg(root, "cconspkg", "1.0", code = 'add <- function(x, y) .Call("cons_add", x, y, PACKAGE = "cconspkg")',
            namespace = c("useDynLib(cconspkg)", "importFrom(cprovpkg, f)"),
-           imports = "cprovpkg", linkingto = if (linkingto) "cprovpkg", src = src)
+           imports = "cprovpkg", linkingto = "cprovpkg", src = src)
 }
 
 with_lib <- function(lib, code){
