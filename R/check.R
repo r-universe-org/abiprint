@@ -31,7 +31,13 @@ abi_check <- function(x, exports = NULL, lib.loc = NULL){
   for (i in seq_len(nrow(imports))) {
     key <- imports$key[i]
     dep <- key_package(key)
-    what <- if (grepl("::", key, fixed = TRUE)) paste("S4 class", sub("^[^:]*::", "", key)) else "C headers"
+    what <- if (endsWith(key, "()")) {
+      paste("C function", sub("^[^:]*::", "", key))
+    } else if (grepl("::", key, fixed = TRUE)) {
+      paste("S4 class", sub("^[^:]*::", "", key))
+    } else {
+      "C headers"
+    }
     new <- exports$hash[exports$key == key]
     reason <- if (!dep %in% key_package(exports$key)) {
       "dependency not found"

@@ -5,13 +5,17 @@
 #' package was built, in the library that it was built with.
 #'
 #' The **exports** are the parts of the package that dependents may copy at
-#' build time: a hash of each S4 class definition, and a hash of the C headers
-#' in its `include` directory. Unlike the version, these hashes only change
-#' when something changes that affects dependents.
+#' build time: a hash of each S4 class definition, a hash of the C headers in
+#' its `include` directory, and a hash of each C function that it registers
+#' with `R_RegisterCCallable()`. The hash of a C function covers its
+#' declaration in the headers, and the definitions of the types that it uses.
+#' Unlike the version, these hashes only change when something changes that
+#' affects dependents.
 #'
 #' The **imports** are the exports of its dependencies that the package copied
-#' when it was built: the classes that it extends, and the headers of `C API`
-#' and `linked library` dependencies (see [abi_deps()]). Other classes of the
+#' when it was built: the classes that it extends, the C functions of `C API`
+#' dependencies that it calls, and the headers of `linked library`
+#' dependencies (see [abi_deps()]). Other classes and functions of the
 #' dependency are not included, so a change in those does not trigger a
 #' rebuild.
 #'
@@ -25,9 +29,10 @@
 #'
 #' @inheritParams abi_deps
 #' @return a list with data frames `exports` and `imports`, both with columns
-#' `key` and `hash`. The key is `<package>::<class>` for an S4 class, or
-#' `<package>/include` for the C headers. Package names cannot contain `:` or
-#' `/`, so the package is everything before the first `::` or `/`.
+#' `key` and `hash`. The key is `<package>::<class>` for an S4 class,
+#' `<package>::<function>()` for a C function, or `<package>/include` for the
+#' C headers. Package names cannot contain `:` or `/`, so the package is
+#' everything before the first `::` or `/`.
 #' @export
 #' @examples
 #' abi_list("stats4")
@@ -39,9 +44,10 @@ abi_exports <- function(pkg, lib.loc = NULL){
   path <- find.package(pkg, lib.loc)
   defs <- class_defs(load_rdb(path, pkg))
   headers <- header_hash(path)
+  functions <- c_function_hashes(pkg, path, lib.loc)
   abi_table(
-    key = c(if (length(headers)) paste0(pkg, "/include"), if (length(defs)) paste0(pkg, "::", names(defs))),
-    hash = c(headers, vapply(defs, class_hash, "", USE.NAMES = FALSE))
+    key = c(if (length(headers)) paste0(pkg, "/include"), if (length(defs)) paste0(pkg, "::", names(defs)), names(functions)),
+    hash = c(headers, vapply(defs, class_hash, "", USE.NAMES = FALSE), unname(functions))
   )
 }
 
@@ -49,13 +55,21 @@ abi_imports <- function(pkg, lib.loc = NULL){
   path <- find.package(pkg, lib.loc)
   deps <- rbind(linkingto_deps(path, lib.loc), s4_deps(load_rdb(path, pkg), pkg, lib.loc))
   deps <- deps[deps$type != "headers", ]
+  strings <- NULL
   out <- abi_table()
   for (dep in unique(deps$package)) {
     rows <- deps[deps$package == dep, ]
-    wanted <- paste0(dep, "::", rows$detail[rows$type == "S4 class"])
-    if (any(c("C API", "linked library") %in% rows$type))
-      wanted <- c(wanted, paste0(dep, "/include"))
     exports <- abi_exports(dep, lib.loc)
+    wanted <- paste0(dep, "::", rows$detail[rows$type == "S4 class"])
+    if ("C API" %in% rows$type) {
+      # The C functions of the dependency that the package calls by name
+      strings <- strings %||% binary_strings(shared_objects(path))
+      functions <- grep("\\(\\)$", exports$key, value = TRUE)
+      used <- functions[sub("^[^:]*::(.*)\\(\\)$", "\\1", functions) %in% strings]
+      wanted <- c(wanted, used)
+    }
+    if ("linked library" %in% rows$type)
+      wanted <- c(wanted, paste0(dep, "/include"))
     out <- rbind(out, exports[exports$key %in% wanted, ])
   }
   abi_table(out$key, out$hash)
@@ -82,13 +96,14 @@ class_hash <- function(def){
   supers <- vapply(def@contains, function(ext){
     sprintf("contains %s@%s", ext@superClass, super_package(ext))
   }, "")
-  md5_text(c(def@className, paste("virtual:", def@virtual), sort(slots), sort(supers)))
+  hash_text(c(def@className, paste("virtual:", def@virtual),
+             sort(slots, method = "radix"), sort(supers, method = "radix")))
 }
 
 header_hash <- function(path){
   inc <- file.path(path, "include")
-  files <- sort(list.files(inc, recursive = TRUE))
+  files <- sort(list.files(inc, recursive = TRUE), method = "radix")
   if (!length(files))
     return(NULL)
-  md5_text(paste(files, tools::md5sum(file.path(inc, files))))
+  hash_text(paste(files, tools::sha256sum(file.path(inc, files))))
 }

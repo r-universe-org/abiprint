@@ -1,8 +1,10 @@
 base_packages <- c("base", "compiler", "datasets", "graphics", "grDevices", "grid",
   "methods", "parallel", "splines", "stats", "stats4", "tcltk", "tools", "utils")
 
-md5_text <- function(x){
-  unname(tools::md5sum(bytes = charToRaw(paste(x, collapse = "\n"))))
+# The first 16 hex digits (64 bits) of the SHA-256 of the lines: more than
+# enough to detect changes (this is not used for security)
+hash_text <- function(x){
+  substr(unname(tools::sha256sum(bytes = charToRaw(paste(x, collapse = "\n")))), 1, 16)
 }
 
 read_description <- function(path){
@@ -38,9 +40,12 @@ super_package <- function(ext){
   attr(ext@superClass, "package") %||% ""
 }
 
+# Shared libraries of a package, but not the debug info that macOS stores in
+# libs/pkg.so.dSYM/Contents/Resources/DWARF/pkg.so
 shared_objects <- function(path){
-  list.files(file.path(path, "libs"), pattern = "\\.(so|dll|dylib)$",
-             recursive = TRUE, full.names = TRUE)
+  files <- list.files(file.path(path, "libs"), pattern = "\\.(so|dll|dylib)$",
+                      recursive = TRUE, full.names = TRUE)
+  files[!grepl(".dSYM/", files, fixed = TRUE)]
 }
 
 # Shared libraries that a package ships for others to link against, such as
@@ -50,15 +55,16 @@ shipped_libraries <- function(path){
 }
 
 # Check if any of the files contains the string as a separate C string, i.e.
-# preceded by a NUL byte (or one of the characters in 'after') and followed by
-# NUL. Short strings such as "BH" also occur by chance inside machine code.
+# followed by NUL and not preceded by another character of a name. Short names
+# also occur by chance in machine code, which is why a C API also requires that
+# the dependency registers C functions.
 contains_string <- function(files, string, after = ""){
-  starts <- as.raw(c(0, utf8ToInt(after)))
   needle <- c(charToRaw(string), as.raw(0))
+  name_chars <- charToRaw("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._")
   for (file in files) {
     bytes <- readBin(file, "raw", file.size(file))
     for (pos in grepRaw(needle, bytes, fixed = TRUE, all = TRUE)) {
-      if (pos > 1 && bytes[pos - 1] %in% starts)
+      if (pos == 1 || !bytes[pos - 1] %in% name_chars || bytes[pos - 1] %in% charToRaw(after))
         return(TRUE)
     }
   }

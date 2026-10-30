@@ -7,9 +7,10 @@ test_that("package names only match as separate C strings", {
   write_bytes(nul, charToRaw("Rsamtools"), nul)
   expect_true(abitools:::contains_string(file, "Rsamtools"))
 
-  # Random bytes in machine code followed by the name
-  write_bytes(as.raw(0xd0), charToRaw("BH"), nul)
-  expect_false(abitools:::contains_string(file, "BH"))
+  # The first string of a section may directly follow machine code
+  write_bytes(as.raw(c(0xc0, 0x03, 0x5f, 0xd6)), charToRaw("prov_add"), nul)
+  expect_true(abitools:::contains_string(file, "prov_add"))
+  expect_equal(abitools:::read_strings(file), "prov_add")
 
   # Part of a longer string
   write_bytes(nul, charToRaw("libBH"), nul)
@@ -19,6 +20,5 @@ test_that("package names only match as separate C strings", {
 
   # Linked libraries are referenced by path, e.g. @rpath/libtbb.dylib
   write_bytes(charToRaw("@rpath/libtbb.dylib"), nul)
-  expect_false(abitools:::contains_string(file, "libtbb.dylib"))
   expect_true(abitools:::contains_string(file, "libtbb.dylib", after = "/"))
 })

@@ -1,0 +1,52 @@
+name: Survey
+
+# Run abitools on commonly used CRAN and Bioconductor packages with C APIs and
+# S4 classes (see survey/select.R), in the build image of r-universe, to find
+# packages for which it fails, gives false positives, or finds no signatures.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 3 * * 1'
+  push:
+    paths:
+      - 'survey/**'
+      - '.github/workflows/survey.yml'
+
+jobs:
+  survey:
+    runs-on: ubuntu-latest
+    container: ghcr.io/r-universe-org/base-image:latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install libclang
+        run: apt-get update && apt-get install -y libclang-dev
+
+      - name: Install abitools
+        run: R CMD INSTALL .
+
+      - name: Select packages
+        run: Rscript survey/select.R > packages.txt
+
+      - name: Install packages
+        run: Rscript survey/install.R packages.txt
+
+      - name: Inspect all installed packages
+        run: |
+          Rscript -e 'ip <- installed.packages(); writeLines(sort(unique(rownames(ip)[is.na(ip[, "Priority"]) | ip[, "Priority"] != "base"]), method = "radix"))' > installed.txt
+          echo "Inspecting $(wc -l < installed.txt) packages"
+          sh survey/survey.sh installed.txt results.jsonl
+
+      - name: Report
+        run: Rscript survey/report.R results.jsonl
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: survey-results
+          path: |
+            packages.txt
+            installed.txt
+            results.jsonl

@@ -14,6 +14,7 @@ Description: An installed R package may contain state copied from its
     by a change, rather than relying on version numbers.
 License: MIT + file LICENSE
 Encoding: UTF-8
+SystemRequirements: libclang (deb: libclang-dev, rpm: clang-devel, brew: llvm)
 Depends:
     R (>= 4.5.0)
 Imports:
