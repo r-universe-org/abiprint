@@ -290,7 +290,8 @@ matter.
 - Objects in a package that hold code of a dependency (e.g. `f <- dep:::g`)
   are reported by `abi_deps()` but not hashed.
 - Registered C functions of a package that are not declared in its headers
-  (or that have no headers at all) cannot be hashed.
+  (or that have no headers at all) cannot be hashed. This is pointless anyway
+  because rebuilding a package which hardcodes external APIs wont fix anything.
 - Signatures depend on the platform ABI (sizes and alignments), and C++ types
   of the standard library (such as `std::string`) differ between libc++ and
   libstdc++. Results should only be compared between packages that were
