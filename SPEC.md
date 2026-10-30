@@ -251,16 +251,20 @@ itself, not a base package), `D` imports `P::<superclass>`. Superclasses that
 were registered with `setOldClass()` (i.e. that extend `oldClass`) are
 excluded.
 
-**LinkingTo dependencies.** For each package `P` in the `LinkingTo` field of
-`D`:
+**C APIs.** For each package `P` in the `LinkingTo`, `Imports`, or `Depends`
+field of `D`: if the shared libraries of `P` contain the bytes
+`R_RegisterCCallable`, and `P` is a string (section 4.2) in the shared
+libraries of `D` (for names that contain a `.`: the name followed by a NUL
+byte, and not preceded by a character from `[A-Za-z0-9._]`), then `P` is a
+**C API** dependency. `D` imports `P::<name>()` for each C function exported
+by `P` whose name is a string in the shared libraries of `D`. If there are
+none, `D` imports `P/include` instead (if `P` exports it). Some packages call
+a C API without `LinkingTo`, with their own declarations of the functions.
 
-- If the shared libraries of `P` contain the bytes `R_RegisterCCallable`, and
-  the shared libraries of `D` contain `P` as a string (followed by a NUL byte,
-  and not preceded by a character from `[A-Za-z0-9._]`), then `P` is a
-  **C API** dependency. `D` imports `P::<name>()` for each C function exported
-  by `P` whose name is a string (section 4.2) in the shared libraries of `D`.
-  If there are none, `D` imports `P/include` instead.
-- Otherwise, if `P` ships a shared library in its `lib` directory (a file
+**LinkingTo dependencies.** For each other package `P` in the `LinkingTo`
+field of `D`:
+
+- If `P` ships a shared library in its `lib` directory (a file
   with extension `.so`, `.dylib` or `.dll`, optionally followed by a version
   such as `.so.2`) and the shared libraries of `D` contain its file name as a
   string (followed by NUL, preceded by `/` or by a character that is not in

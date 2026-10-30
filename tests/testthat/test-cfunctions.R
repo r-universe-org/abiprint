@@ -38,3 +38,25 @@ test_that("only changes in the C functions that a package calls require a rebuil
     expect_equal(abi_check(record$record)$reason, "C function prov_add() changed")
   })
 })
+
+test_that("C APIs are also found without LinkingTo", {
+  skip_on_cran()
+  root <- tempfile()
+  lib <- file.path(root, "lib")
+  dir.create(lib, recursive = TRUE)
+  on.exit(unlink(root, recursive = TRUE))
+
+  # The consumer declares the function itself, and only imports the provider
+  install_pkg(make_c_provider(root, "1.0"), lib)
+  install_pkg(make_c_consumer(root, linkingto = FALSE), lib)
+  record <- with_lib(lib, {
+    expect_equal(abi_deps("cconspkg")$type, "C API")
+    x <- abi_list("cconspkg")
+    expect_equal(x$imports$key, "cprovpkg::prov_add()")
+    x
+  })
+  install_pkg(make_c_provider(root, "1.1", add_args = "int x, double y"), lib)
+  with_lib(lib, {
+    expect_equal(abi_check(record)$reason, "C function prov_add() changed")
+  })
+})
