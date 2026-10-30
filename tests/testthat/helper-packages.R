@@ -57,13 +57,17 @@ make_consumer <- function(root){
 
 # A package with a C API: prov_add() and prov_info() are registered
 make_c_provider <- function(root, version, add_args = "int x, int y", struct = "int a;", extra = NULL){
-  header <- c("typedef struct prov_struct {", struct, "} prov_t;",
+  header <- c("/* prov_hidden() is registered, but not declared here */",
+              "typedef struct prov_struct {", struct, "} prov_t;",
               sprintf("int prov_add(%s);", add_args),
               "int prov_info(prov_t *p);", extra)
   src <- c("#include <Rinternals.h>", "#include <R_ext/Rdynload.h>", "#include <cprovpkg.h>",
            sprintf("int prov_add(%s){ return 0; }", add_args),
            "int prov_info(prov_t *p){ return 0; }",
+           "/* Registered, but not declared in the header */",
+           "static int prov_hidden(void){ return 0; }",
            "void R_init_cprovpkg(DllInfo *dll){",
+           '  R_RegisterCCallable("cprovpkg", "prov_hidden", (DL_FUNC) &prov_hidden);',
            '  R_RegisterCCallable("cprovpkg", "prov_add", (DL_FUNC) &prov_add);',
            '  R_RegisterCCallable("cprovpkg", "prov_info", (DL_FUNC) &prov_info);',
            "}")

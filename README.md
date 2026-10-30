@@ -136,10 +136,10 @@ different ways in which packages declare a C API: plain declarations (cli,
 xts), macros as return type (nloptr), stub prefixes such as `_fun` (Bioconductor),
 `_pkg_fun` (Rcpp interfaces) or `M_fun` (Matrix), function pointers (libgeos,
 PreciseSums), and casts at call sites (Rcpp, Matrix, RNifti). Functions that
-are not found get the hash of all headers.
+are not found in the headers are not exported.
 
 **Headers:** a hash of all files in the `include` directory, used for
-`linked library` dependencies and as a fallback.
+`linked library` dependencies.
 
 ## Validation
 
@@ -172,10 +172,10 @@ abitools requires libclang: `apt-get install libclang-dev` (Debian, Ubuntu),
   to, and the package itself if it registers C functions. Run it in the
   library that the package was built with, and compare results only within
   the same platform and R version.
-- C functions that are registered but not declared in the headers (or of
-  packages without headers) are not hashed. Functions that libclang does not
-  find (e.g. in an inactive `#ifdef` branch) get the hash of all headers, so
-  any change in the headers marks their importers as dirty.
+- C functions that are registered but not found in the headers (e.g. in an
+  inactive `#ifdef` branch, or of packages without headers) are not exported.
+  For the C APIs that Bioconductor packages use via `LinkingTo`, all functions
+  that are called are found.
 - Calls to `R_GetCCallable()` of a package that is not in `LinkingTo` are not
   imports, on purpose. Such packages declare the functions themselves (e.g.
   dplyr for vctrs, SNPRelate for SeqArray), so a rebuild would not pick up a

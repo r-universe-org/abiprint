@@ -80,8 +80,8 @@ A package exports a C function `<name>` if:
 4. after loading the namespace of the package, `R_GetCCallable("<package>",
    "<name>")` succeeds.
 
-The hash is `hash(signature)`, with the signature from section 5. If no
-signature is found, the hash is the hash of the headers (section 2).
+The hash is `hash(signature)`, with the signature from section 5. Functions
+for which no signature is found are not exported.
 
 ### 4.2 Strings in shared libraries
 
@@ -259,7 +259,6 @@ excluded.
   and not preceded by a character from `[A-Za-z0-9._]`), then `P` is a
   **C API** dependency. `D` imports `P::<name>()` for each C function exported
   by `P` whose name is a string (section 4.2) in the shared libraries of `D`.
-  If there are none, `D` imports `P/include` instead.
 - Otherwise, if `P` ships a shared library in its `lib` directory (a file
   with extension `.so`, `.dylib` or `.dll`, optionally followed by a version
   such as `.so.2`) and the shared libraries of `D` contain its file name as a

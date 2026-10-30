@@ -66,7 +66,7 @@ abi_imports <- function(pkg, lib.loc = NULL){
       strings <- strings %||% binary_strings(shared_objects(path))
       functions <- grep("\\(\\)$", exports$key, value = TRUE)
       used <- functions[sub("^[^:]*::(.*)\\(\\)$", "\\1", functions) %in% strings]
-      wanted <- c(wanted, if (length(used)) used else paste0(dep, "/include"))
+      wanted <- c(wanted, used)
     }
     if ("linked library" %in% rows$type)
       wanted <- c(wanted, paste0(dep, "/include"))

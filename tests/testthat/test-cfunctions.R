@@ -10,6 +10,7 @@ test_that("only changes in the C functions that a package calls require a rebuil
   record <- with_lib(lib, {
     expect_equal(abi_deps("cconspkg")$type, "C API")
     exports <- abi_list("cprovpkg")$exports
+    # prov_hidden() is registered, but not in the header, so it is not exported
     expect_equal(exports$key, c("cprovpkg/include", "cprovpkg::prov_add()", "cprovpkg::prov_info()"))
     x <- abi_list("cconspkg")
     expect_equal(x$imports$key, "cprovpkg::prov_add()")

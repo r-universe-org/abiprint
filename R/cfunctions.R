@@ -1,7 +1,7 @@
 # Hashes of the C functions that a package registers with R_RegisterCCallable().
 # The hash covers the signature of the function as described by libclang (see
-# clang.R and SPEC.md). For functions that are not found in the headers, the
-# hash of all headers is used instead.
+# clang.R and SPEC.md). Functions that are not found in the headers are not
+# exported: a dependent cannot have been compiled against their declaration.
 c_function_hashes <- function(pkg, path, lib.loc = NULL){
   libs <- shared_objects(path)
   if (!length(libs) || !contains_bytes(libs, "R_RegisterCCallable"))
@@ -9,10 +9,10 @@ c_function_hashes <- function(pkg, path, lib.loc = NULL){
   names <- registered_callables(pkg, path, lib.loc)
   if (!length(names))
     return(character())
-  fallback <- header_hash(path) %||% ""
   sigs <- clang_signatures(pkg, path, names, lib.loc)
-  hashes <- ifelse(is.na(sigs), fallback, vapply(sigs, hash_text, ""))
-  names(hashes) <- paste0(pkg, "::", names, "()")
+  found <- !is.na(sigs)
+  hashes <- vapply(sigs[found], hash_text, "", USE.NAMES = FALSE)
+  names(hashes) <- paste0(pkg, "::", names[found], "()")
   hashes
 }
 

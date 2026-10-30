@@ -42,7 +42,7 @@ if (length(check)) {
     stale_classes = vapply(check, num, 0L, "stale_classes"))))
 }
 
-# Registered C functions without a signature (these get the hash of all headers)
+# Registered C functions without a signature (these are not exported)
 providers <- Filter(function(r) num(r, "registered") > 0, results[ok])
 if (length(providers)) {
   say("")
