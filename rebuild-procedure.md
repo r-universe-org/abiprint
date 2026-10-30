@@ -25,13 +25,13 @@ example, part of the output for Rsamtools:
 ```js
 _abi: {
   exports: [
-    {key: 'Rsamtools::BamFile', hash: 'ee6ceb9e...'},
+    {key: 'Rsamtools::BamFile', hash: 'fbf800fa72e1dad8'},
     ...
   ],
   imports: [
-    {key: 'S4Vectors::_new_IntAE()', hash: '80cb07b3...'},
-    {key: 'S4Vectors::List', hash: '7cded7a2...'},
-    {key: 'S4Vectors::Vector', hash: '10ab26d3...'},
+    {key: 'S4Vectors::_new_IntAE()', hash: '26bbe984d9003e07'},
+    {key: 'S4Vectors::List', hash: '90a253151dc8db9b'},
+    {key: 'S4Vectors::Vector', hash: '09cab0bd77ae353b'},
     ...
   ]
 }

@@ -1,8 +1,10 @@
 base_packages <- c("base", "compiler", "datasets", "graphics", "grDevices", "grid",
   "methods", "parallel", "splines", "stats", "stats4", "tcltk", "tools", "utils")
 
-md5_text <- function(x){
-  unname(tools::md5sum(bytes = charToRaw(paste(x, collapse = "\n"))))
+# The first 16 hex digits (64 bits) of the SHA-256 of the lines: more than
+# enough to detect changes (this is not used for security)
+hash_text <- function(x){
+  substr(unname(tools::sha256sum(bytes = charToRaw(paste(x, collapse = "\n")))), 1, 16)
 }
 
 read_description <- function(path){

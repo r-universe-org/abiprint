@@ -27,8 +27,9 @@ before the first `::` or `/`.
 
 Conventions in this document:
 
-- `md5(lines)` is the MD5 hash, in lowercase hexadecimal, of the UTF-8 strings
-  `lines` joined with a newline (`\n`), without a trailing newline.
+- `hash(lines)` is the first 16 characters of the SHA-256 hash, in lowercase
+  hexadecimal, of the UTF-8 strings `lines` joined with a newline (`\n`),
+  without a trailing newline.
 - Sorting is by bytes (as in the C locale).
 - The `include` directory of a package is `<installed package>/include`. The
   shared libraries of a package are the files in `<installed package>/libs`
@@ -41,11 +42,12 @@ If the `include` directory of a package contains files, the package exports
 `<package>/include` with the hash
 
 ```
-md5(for each file, sorted by path: "<path> <md5 of the file>")
+hash(for each file, sorted by path: "<path> <sha256 of the file>")
 ```
 
 where `<path>` is the path of the file relative to the `include` directory,
-with `/` as separator, and `<md5 of the file>` is the MD5 of its bytes.
+with `/` as separator, and `<sha256 of the file>` is the full SHA-256 of its
+bytes in lowercase hexadecimal.
 
 ## 3. S4 classes
 
@@ -53,7 +55,7 @@ A package exports every S4 or reference class that is defined in its
 lazy-load database (the objects named `.__C__<class>`), with the hash
 
 ```
-md5(<class name>,
+hash(<class name>,
     "virtual: TRUE" or "virtual: FALSE",
     sorted lines "slot <name>: <class>@<package>",
     sorted lines "contains <class>@<package>")
@@ -78,7 +80,7 @@ A package exports a C function `<name>` if:
 4. after loading the namespace of the package, `R_GetCCallable("<package>",
    "<name>")` succeeds.
 
-The hash is `md5(signature)`, with the signature from section 5. If no
+The hash is `hash(signature)`, with the signature from section 5. If no
 signature is found, the hash is the hash of the headers (section 2).
 
 ### 4.2 Strings in shared libraries

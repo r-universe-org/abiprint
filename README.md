@@ -85,19 +85,19 @@ abi_list("minqa")
 #> <0 rows> (or 0-length row.names)
 #>
 #> $imports
-#>                              key                             hash
-#> 1 Rcpp::Rcpp_precious_preserve() db326d5386e653731de061cef9d03e24
-#> 2   Rcpp::Rcpp_precious_remove() 84acf2c1e7fac9022b40c1e5c1c249e2
-#> 3               Rcpp::demangle() b7df01794cea5ffd92afa5cd4cc9fd17
-#> 4   Rcpp::rcpp_get_stack_trace() 11b1009f8761b93fbbdce90d8a3e5d32
-#> 5   Rcpp::rcpp_set_stack_trace() 8f9e78c8c3a7d415f3b31e11af05ec05
+#>                              key             hash
+#> 1 Rcpp::Rcpp_precious_preserve() 33a97ea62b293da6
+#> 2   Rcpp::Rcpp_precious_remove() 63d26947ba7e1377
+#> 3               Rcpp::demangle() ae88df8ffb66ca8d
+#> 4   Rcpp::rcpp_get_stack_trace() c684a9bbe15cdc52
+#> 5   Rcpp::rcpp_set_stack_trace() 33a97ea62b293da6
 
 abi_list("Rsamtools")$imports
-#>                            key                             hash
-#> 1      Biostrings::_AAdecode() 2b5149b1b683df2f924ed4fdabba29b8
+#>                            key             hash
+#> 1      Biostrings::_AAdecode() 77fffff2debd8d19
 #> ...
-#> 65        S4Vectors::Annotated 95bf8c6a9de4f2f9373d24ccc74fe28a
-#> 66             S4Vectors::List 7cded7a2c2addcb2a2d3392a89042c1e
+#> 65        S4Vectors::Annotated 9b5b8ee6ad9969f8
+#> 66             S4Vectors::List 90a253151dc8db9b
 #> ...
 ```
 
@@ -188,11 +188,11 @@ of entries that are easy to store and query in a database:
 ```json
 {
   "exports": [
-    {"key": "Rsamtools::ApplyPileupsParam", "hash": "614f6d9b9a46c60ec2728a5e00a85d0d"},
+    {"key": "Rsamtools::ApplyPileupsParam", "hash": "ca6334264a0e4b9c"},
     ...
   ],
   "imports": [
-    {"key": "S4Vectors::Vector", "hash": "10ab26d37b3e0ebc9fdf82fbfee25632"},
+    {"key": "S4Vectors::Vector", "hash": "09cab0bd77ae353b"},
     ...
   ]
 }

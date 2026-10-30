@@ -48,6 +48,6 @@ fi
 
 echo "Using libclang from $LIBDIR"
 echo "#define CLANG_RESOURCE_DIR \"$RESOURCEDIR\"" > src/clang_config.h
-PKG_CPPFLAGS="-I$INCLUDEDIR"
+PKG_CPPFLAGS="-isystem $INCLUDEDIR"
 PKG_LIBS="-L$LIBDIR -lclang -Wl,-rpath,$LIBDIR"
 sed -e "s|@PKG_CPPFLAGS@|$PKG_CPPFLAGS|" -e "s|@PKG_LIBS@|$PKG_LIBS|" src/Makevars.in > src/Makevars

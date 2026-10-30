@@ -96,7 +96,7 @@ class_hash <- function(def){
   supers <- vapply(def@contains, function(ext){
     sprintf("contains %s@%s", ext@superClass, super_package(ext))
   }, "")
-  md5_text(c(def@className, paste("virtual:", def@virtual),
+  hash_text(c(def@className, paste("virtual:", def@virtual),
              sort(slots, method = "radix"), sort(supers, method = "radix")))
 }
 
@@ -105,5 +105,5 @@ header_hash <- function(path){
   files <- sort(list.files(inc, recursive = TRUE), method = "radix")
   if (!length(files))
     return(NULL)
-  md5_text(paste(files, tools::md5sum(file.path(inc, files))))
+  hash_text(paste(files, tools::sha256sum(file.path(inc, files))))
 }

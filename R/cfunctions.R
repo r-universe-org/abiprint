@@ -11,7 +11,7 @@ c_function_hashes <- function(pkg, path, lib.loc = NULL){
     return(character())
   fallback <- header_hash(path) %||% ""
   sigs <- clang_signatures(pkg, path, names, lib.loc)
-  hashes <- ifelse(is.na(sigs), fallback, vapply(sigs, md5_text, ""))
+  hashes <- ifelse(is.na(sigs), fallback, vapply(sigs, hash_text, ""))
   names(hashes) <- paste0(pkg, "::", names, "()")
   hashes
 }
