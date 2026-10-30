@@ -142,10 +142,7 @@ the headers (the type that dependents actually use to call the function), or
 else from a declaration of the function. Only headers that parse without
 errors are used.
 
-For the functions that libclang does not find, for example in an `#ifdef`
-branch that is not active, a simple text parser looks for the declaration
-instead. It supports the different ways in which packages declare their C
-API:
+Packages declare their C API in different ways, which are all supported:
 
 - a plain declaration `int fun(int x);` (cli, xts, actuar, ...), possibly with
   a macro as return type `EXTERN(int) fun(int x);` (nloptr)
@@ -154,10 +151,13 @@ API:
   around `M_fun` (Matrix), `_p_fun` (rxode2ll)
 - a function pointer `extern int (*fun)(int x);` (libgeos), or a variable with
   a function pointer type `extern fun_type fun;` (PreciseSums)
-- only a cast at the call site `f = (int (*)(int)) R_GetCCallable("pkg", "fun");`
-  (RNifti, rxode2)
+- a cast at the call site `f = (int (*)(int)) R_GetCCallable("pkg", "fun");`
+  (Rcpp, Matrix, RNifti, rxode2)
 
-If neither finds a function, the hash of all headers is used instead.
+If a function is not found (e.g. because it is only declared in an `#ifdef`
+branch that is not active, or in a header that does not parse on its own), the
+hash of all headers is used instead. The exact format is described in
+[SPEC.md](SPEC.md).
 
 Rcpp packages call only the few Rcpp functions they use, because these are
 inline functions in the Rcpp headers. Bioconductor packages include stubs for
@@ -259,17 +259,19 @@ Inspecting a package takes 0 to 2.5 seconds.
 - The package is inspected without being loaded, but unserializing its
   lazyload database loads the namespaces it refers to. Run it in the library
   that was used to build the package.
-- Functions that libclang does not find are hashed with a simple text
-  parser: macros are not expanded, and types that are defined in the headers
-  of another package are not followed.
+- Functions that libclang does not find in the headers are hashed by the
+  hash of all headers, so any change in the headers marks their importers as
+  dirty.
 - Functions that are not mentioned in the headers at all (some packages
   declare them only in their own sources) are not exported, so changes to
   them are not detected.
-- Hashes may depend on the version of libclang and of the system headers, so
-  all packages in a repository should be inspected with the same setup. Hashes
-  of C functions are the same on Linux and macOS, except for C++ functions
-  that use types of the C++ standard library (e.g. `std::string`), which
-  differs between the platforms.
+- Hashes of C functions do not depend on the version of libclang: on Ubuntu,
+  libclang 17 to 22 give identical signatures for all 1290 registered
+  functions of 18 packages (including the C++ functions of Rcpp). They are
+  also the same on Linux and macOS, except for C++ functions that use types of
+  the C++ standard library (e.g. `std::string`), which differs between the
+  platforms. Results should still be compared within the same platform and R
+  version.
 - The headers of `linked library` dependencies are hashed as a whole: any
   change in them triggers a rebuild.
 - The class hash ignores prototypes and validity methods. A changed prototype

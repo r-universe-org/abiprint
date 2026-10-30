@@ -41,6 +41,7 @@ typedef struct {
   int n, cap;
   char **found, **kind, **sig;
   /* records that are being described, to stop recursion */
+  int names_only;
   int nvisit;
   char *visit[256];
 } state_t;
@@ -83,37 +84,57 @@ static enum CXChildVisitResult describe_enum_constant(CXCursor c, CXCursor paren
   return CXChildVisit_Continue;
 }
 
-/* Records and enums from other headers (R, system, C++ library) are only
- * described by name and size. Names of anonymous types contain a file path,
- * so these are not used. */
-static void describe_name(buf_t *b, CXCursor decl, CXType t){
-  if (clang_Cursor_isAnonymous(decl)) {
-    put(b, "anonymous");
-  } else {
-    CXString name = clang_getTypeSpelling(t);
-    const char *str = clang_getCString(name);
-    if (strstr(str, "(unnamed") || strstr(str, "(anonymous")) {
-      put(b, "anonymous");
-    } else {
-      /* Qualifiers do not affect the ABI, and C spells 'struct x' where C++
-       * spells 'x' */
-      const char *prefixes[] = {"const ", "volatile ", "struct ", "union ", "class ", "enum "};
-      for (int i = 0; i < 6; i++) {
-        size_t n = strlen(prefixes[i]);
-        if (strncmp(str, prefixes[i], n) == 0) str += n;
+/* The name of a record or enum from other headers (R, system, C++ library):
+ * the names of the enclosing namespaces and classes, the name of the type,
+ * and its template arguments (types without names, or integer values). The
+ * names of anonymous types are not used, because these contain a path. */
+static void qualified_name(buf_t *b, CXCursor decl, state_t *s, int depth){
+  CXCursor parent = clang_getCursorSemanticParent(decl);
+  switch (clang_getCursorKind(parent)) {
+  case CXCursor_Namespace:
+  case CXCursor_StructDecl:
+  case CXCursor_ClassDecl:
+  case CXCursor_UnionDecl:
+  case CXCursor_ClassTemplate:
+    qualified_name(b, parent, s, depth);
+    put(b, "::");
+    break;
+  default:
+    break;
+  }
+  CXString name = clang_getCursorSpelling(decl);
+  const char *str = clang_getCString(name);
+  int anonymous = !*str || strchr(str, '(') || clang_Cursor_isAnonymous(decl);
+  put(b, anonymous ? "anonymous" : str);
+  clang_disposeString(name);
+  int n = clang_Cursor_getNumTemplateArguments(decl);
+  if (n > 0) {
+    put(b, "<");
+    for (int i = 0; i < n; i++) {
+      if (i) put(b, ",");
+      switch (clang_Cursor_getTemplateArgumentKind(decl, i)) {
+      case CXTemplateArgumentKind_Type:
+        s->names_only++;
+        describe(b, clang_Cursor_getTemplateArgumentType(decl, i), s, depth + 1);
+        s->names_only--;
+        break;
+      case CXTemplateArgumentKind_Integral:
+        putf(b, "%lld", clang_Cursor_getTemplateArgumentValue(decl, i));
+        break;
+      default:
+        put(b, "?");
       }
-      put(b, str);
     }
-    clang_disposeString(name);
+    put(b, ">");
   }
 }
 
 static void describe_record(buf_t *b, CXType t, state_t *s, int depth){
   CXCursor decl = clang_getTypeDeclaration(t);
   long long size = clang_Type_getSizeOf(t);
-  if (size < 0 || depth > 30 || !in_dirs(decl, s)) {
+  if (size < 0 || depth > 30 || s->names_only || !in_dirs(decl, s)) {
     put(b, "record(");
-    describe_name(b, decl, t);
+    qualified_name(b, decl, s, depth);
     putf(b, ",%lld)", size);
     return;
   }
@@ -184,12 +205,11 @@ static void describe(buf_t *b, CXType t, state_t *s, int depth){
     CXCursor decl = clang_getTypeDeclaration(t);
     put(b, "enum(");
     describe(b, clang_getEnumDeclIntegerType(decl), s, depth + 1);
-    if (in_dirs(decl, s)) {
-      put(b, "|");
+    put(b, "|");
+    if (in_dirs(decl, s) && !s->names_only) {
       clang_visitChildren(decl, describe_enum_constant, b);
     } else {
-      put(b, "|");
-      describe_name(b, decl, t);
+      qualified_name(b, decl, s, depth);
     }
     put(b, ")");
     return;
@@ -214,19 +234,26 @@ static void describe(buf_t *b, CXType t, state_t *s, int depth){
   case CXType_UInt128:
     putf(b, "UInt%lld", 8 * clang_Type_getSizeOf(t));
     return;
+  case CXType_Half:
+  case CXType_Float16:
+  case CXType_Float:
+  case CXType_Double:
+  case CXType_LongDouble:
+  case CXType_Float128:
+    putf(b, "Float%lld", 8 * clang_Type_getSizeOf(t));
+    return;
+  case CXType_Bool:
+    put(b, "Bool");
+    return;
+  case CXType_Void:
+    put(b, "Void");
+    return;
   default: {
-    /* Builtin types (Int, Double, ...) by kind. Other types (e.g. dependent
-     * types in templates) by their spelling. */
+    /* Other types by the name of their kind in libclang and their size */
     CXString kind = clang_getTypeKindSpelling(t.kind);
     put(b, clang_getCString(kind));
     clang_disposeString(kind);
-    if (t.kind == CXType_Unexposed || t.kind >= CXType_Elaborated) {
-      CXString name = clang_getTypeSpelling(t);
-      put(b, "(");
-      put(b, clang_getCString(name));
-      put(b, ")");
-      clang_disposeString(name);
-    }
+    putf(b, "%lld", 8 * clang_Type_getSizeOf(t));
   }
   }
 }

@@ -2,3 +2,4 @@
 ^.*\.Rproj$
 ^\.Rproj\.user$
 ^rebuild-procedure\.md$
+^SPEC\.md$

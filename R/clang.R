@@ -1,9 +1,8 @@
-# Signatures of C functions with libclang. Unlike the text parser in
-# cfunctions.R (which is used for the functions that clang does not find,
-# e.g. in an inactive #ifdef branch), this runs the preprocessor and
-# describes the actual ABI: the canonical types of the return value and the
-# parameters, and for structs that are defined in the headers of the package
-# (or its LinkingTo dependencies) their size, alignment and field offsets.
+# Signatures of C functions with libclang (see SPEC.md). This runs the
+# preprocessor and describes the actual ABI: the canonical types of the return
+# value and the parameters, and for structs that are defined in the headers of
+# the package (or its LinkingTo dependencies) their size, alignment and field
+# offsets.
 
 clang_resource_dir <- function(){
   .Call(abitools_clang_resource_dir)
@@ -43,7 +42,7 @@ pick_signature <- function(res, variants){
     for (name in variants) {
       sig <- res$sig[res$kind == kind & res$name == name]
       if (length(sig))
-        return(paste(sort(unique(sig)), collapse = "\n"))
+        return(paste(sort(unique(sig), method = "radix"), collapse = "\n"))
     }
   }
   NA_character_
@@ -58,7 +57,8 @@ callable_variants <- function(name, pkg){
 clang_parse <- function(file, names, config){
   cpp_only <- grepl("\\.(hpp|hh|cc|cpp)$|/[^./]+$", file)
   for (lang in if (cpp_only) "c++" else c("c", "c++")) {
-    args <- c("-x", lang, if (lang == "c++") c("-std=gnu++17", "-DR_NO_REMAP"), config$args)
+    std <- if (lang == "c++") c("-std=gnu++17", "-DR_NO_REMAP") else "-std=gnu17"
+    args <- c("-x", lang, std, config$args)
     res <- .Call(abitools_clang_signatures, file, args, names, config$own, config$dirs)
     if (length(res) && res[[4]] == 0)
       return(data.frame(name = res[[1]], kind = res[[2]], sig = res[[3]]))
@@ -97,5 +97,5 @@ entry_headers <- function(inc, names){
     text <- paste(readLines(file, warn = FALSE), collapse = "\n")
     any(vapply(names, grepl, logical(1), x = text, fixed = TRUE))
   }, logical(1))]
-  unique(c(sort(top), sort(mentions)))
+  unique(c(sort(top, method = "radix"), sort(mentions, method = "radix")))
 }

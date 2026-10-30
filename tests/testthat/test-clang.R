@@ -11,7 +11,7 @@ test_that("libclang describes the ABI of a function", {
   sig <- clang_sig(c("typedef struct { int x; double y; } point_t;",
                      "point_t *move(point_t *p, int n);"), "move")
   # A struct that was already described is referred to by its position
-  expect_equal(unname(sig), "function(*{16,8|0:Int32;64:Double;},Int32)->*record#1")
+  expect_equal(unname(sig), "function(*{16,8|0:Int32;64:Float64;},Int32)->*record#1")
 })
 
 test_that("names, formatting and qualifiers do not matter", {
@@ -37,10 +37,29 @@ test_that("function pointers and casts at call sites are found", {
                      "static inline void init(void){",
                      '  void *f = (void *) (int (*)(const char *)) R_GetCCallable("test", "parse");',
                      "}"), c("scale", "parse", "missing"))
-  expect_equal(unname(sig), c("function(Double,Int32)->Double", "function(*Char)->Int32", NA))
+  expect_equal(unname(sig), c("function(Float64,Int32)->Float64", "function(*Char)->Int32", NA))
 })
 
 test_that("headers that do not parse are not used", {
   sig <- clang_sig(c("unknown_t broken(int x);", "int fine(int x);"), c("broken", "fine"))
   expect_equal(unname(sig), c(NA_character_, NA_character_))
+})
+
+test_that("the different ways in which packages declare a C API are found", {
+  sig <- clang_sig(c(
+    "#define MY_EXTERN(type) extern type",
+    "typedef int (*fun_t)(int x);",
+    "MY_EXTERN(double) nlopt_style(int n);",   # macro as return type (nloptr)
+    "int new_thing(int n);",                   # registered as _new_thing (Bioconductor stubs)
+    "extern fun_t precise_sum;",               # variable with a function pointer type (PreciseSums)
+    "extern fun_t _p_prefixed;",               # with a prefix (rxode2ll)
+    "int M_matrix_style(double x);"            # with a prefix (Matrix)
+  ), c("nlopt_style", "_new_thing", "precise_sum", "prefixed", "matrix_style"))
+  expect_equal(unname(sig), c("function(Int32)->Float64", "function(Int32)->Int32",
+    "function(Int32)->Int32", "function(Int32)->Int32", "function(Float64)->Int32"))
+})
+
+test_that("types from other headers are described by name", {
+  sig <- clang_sig(c("#include <stdio.h>", "int write_to(FILE *f, SEXP x);"), "write_to")
+  expect_match(sig, "^function\\(\\*record\\([A-Za-z_:]+,[0-9]+\\),\\*record\\(SEXPREC,-2\\)\\)->Int32$")
 })
