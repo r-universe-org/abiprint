@@ -53,7 +53,7 @@ abi_exports <- function(pkg, lib.loc = NULL){
 
 abi_imports <- function(pkg, lib.loc = NULL){
   path <- find.package(pkg, lib.loc)
-  deps <- rbind(binary_deps(path, lib.loc), s4_deps(load_rdb(path, pkg), pkg, lib.loc))
+  deps <- rbind(linkingto_deps(path, lib.loc), s4_deps(load_rdb(path, pkg), pkg, lib.loc))
   deps <- deps[deps$type != "headers", ]
   strings <- NULL
   out <- abi_table()

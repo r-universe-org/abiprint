@@ -20,15 +20,14 @@ result <- withCallingHandlers(tryCatch({
   sigs <- ns$clang_signatures(pkg, path, registered)
   back <- jsonlite::fromJSON(jsonlite::toJSON(x))
 
-  # Possible calls to R_GetCCallable() of packages that are not a dependency:
+  # Possible calls to R_GetCCallable() of packages that are not in LinkingTo:
   # the binary contains the name of another package that registers C functions,
   # and the name of at least one of those functions
   strings <- ns$binary_strings(ns$shared_objects(path))
   undeclared <- character()
   if ("R_GetCCallable" %in% strings) {
-    desc <- ns$read_description(path)
-    strong <- unlist(lapply(desc[c("LinkingTo", "Imports", "Depends")], ns$parse_deps))
-    others <- setdiff(intersect(strings, rownames(installed.packages())), c(pkg, strong, ns$base_packages))
+    linkingto <- ns$parse_deps(ns$read_description(path)$LinkingTo)
+    others <- setdiff(intersect(strings, rownames(installed.packages())), c(pkg, linkingto, ns$base_packages))
     undeclared <- Filter(function(p){
       any(ns$registered_callables(p, find.package(p)) %in% strings)
     }, others)

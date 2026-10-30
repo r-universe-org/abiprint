@@ -65,9 +65,9 @@ if (length(providers)) {
 undeclared <- Filter(function(r) length(r$undeclared_c_api), results[ok])
 if (length(undeclared)) {
   say("")
-  say("### Possible C API use of packages that are not a dependency")
+  say("### Possible C API use without LinkingTo")
   say("")
-  say("The binary calls `R_GetCCallable()` and contains the names of a package and its C functions, but the package is not in LinkingTo, Imports, or Depends. Such imports are not detected.")
+  say("The binary calls `R_GetCCallable()` and contains the name of a package that registers C functions, but does not link to it. Such imports are not detected.")
   say("")
   out <- c(out, table_md(data.frame(package = vapply(undeclared, `[[`, "", "package"),
     packages = vapply(undeclared, function(r) paste(unlist(r$undeclared_c_api), collapse = ", "), ""))))

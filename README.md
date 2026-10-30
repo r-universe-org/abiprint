@@ -9,11 +9,10 @@ dependencies in two ways:
   another package is stored in the lazy-load database at install time,
   including all inherited slots and superclasses. If the superclass changes,
   the stored subclass is inconsistent.
-- **Cross-package C calls.** Packages call C functions of a dependency
-  (usually in `LinkingTo`) through `R_GetCCallable("pkg", "fun")`, compiled
-  against the function signatures and struct layouts in its headers (or link
-  to a shared library that a `LinkingTo` dependency ships, e.g. TBB in
-  RcppParallel).
+- **Cross-package C calls.** Packages call C functions of a `LinkingTo`
+  dependency through `R_GetCCallable("pkg", "fun")`, compiled against the
+  function signatures and struct layouts in its headers (or link to a shared
+  library that it ships, e.g. TBB in RcppParallel).
 
 abitools computes fingerprints of exactly these parts, to pinpoint which ABIs
 have changed and therefore which dependents need to be rebuilt. The
@@ -177,8 +176,8 @@ abitools requires libclang: `apt-get install libclang-dev` (Debian, Ubuntu),
   packages without headers) are not hashed. Functions that libclang does not
   find (e.g. in an inactive `#ifdef` branch) get the hash of all headers, so
   any change in the headers marks their importers as dirty.
-- Calls to `R_GetCCallable()` of a package that is not a dependency (in
-  `LinkingTo`, `Imports`, or `Depends`) are not detected.
+- Calls to `R_GetCCallable()` of a package that is not in `LinkingTo` are not
+  detected.
 - The class hash ignores prototypes and validity methods.
 - Code that a package copies from a dependency at install time (e.g.
   `f <- dep:::helper`, ggproto or S7 objects) is reported by `abi_deps()` but
