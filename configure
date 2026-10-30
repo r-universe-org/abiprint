@@ -1,47 +1,41 @@
 #!/bin/sh
 # Find libclang, which is used to parse C headers. Set LLVM_CONFIG to the
-# llvm-config of the LLVM to use.
+# llvm-config of the LLVM to use. Otherwise, the first LLVM installation that
+# has libclang, its headers and a clang resource directory is used.
 
-if [ -z "$LLVM_CONFIG" ]; then
-  for candidate in llvm-config $(ls -r /usr/lib/llvm-*/bin/llvm-config 2>/dev/null) \
-      /opt/homebrew/opt/llvm/bin/llvm-config /usr/local/opt/llvm/bin/llvm-config; do
-    if command -v "$candidate" >/dev/null 2>&1; then
-      LLVM_CONFIG="$candidate"
-      break
-    fi
-  done
-fi
-
-if [ "$LLVM_CONFIG" ]; then
-  INCLUDEDIR=$("$LLVM_CONFIG" --includedir)
-  LIBDIR=$("$LLVM_CONFIG" --libdir)
-  RESOURCEDIR=$("$("$LLVM_CONFIG" --bindir)/clang" -print-resource-dir 2>/dev/null)
-else
-  # Ubuntu: libclang-dev without llvm-config (in /usr/lib/llvm-<version>)
-  for dir in $(ls -d /usr/lib/llvm-* 2>/dev/null | sort -V -r); do
-    if [ -f "$dir/include/clang-c/Index.h" ]; then
-      INCLUDEDIR="$dir/include"
-      LIBDIR="$dir/lib"
-      break
-    fi
-  done
-fi
-
-if [ "$LIBDIR" ]; then
+# Check an LLVM installation: sets INCLUDEDIR, LIBDIR and RESOURCEDIR
+check_llvm() {
+  INCLUDEDIR="$1"
+  LIBDIR="$2"
+  RESOURCEDIR="$3"
   if [ -z "$RESOURCEDIR" ]; then
     RESOURCEDIR=$(ls -d "$LIBDIR"/clang/* 2>/dev/null | sort -V | tail -1)
   fi
-  if [ -f "$INCLUDEDIR/clang-c/Index.h" ] && ls "$LIBDIR"/libclang.* >/dev/null 2>&1 && [ -d "$RESOURCEDIR/include" ]; then
-    echo "Using libclang from $LIBDIR"
-    PKG_CPPFLAGS="-I$INCLUDEDIR"
-    echo "#define CLANG_RESOURCE_DIR \"$RESOURCEDIR\"" > src/clang_config.h
-    PKG_LIBS="-L$LIBDIR -lclang -Wl,-rpath,$LIBDIR"
-  else
-    echo "Found LLVM in $LIBDIR, but no libclang, clang-c headers or clang resource directory"
-  fi
+  [ -f "$INCLUDEDIR/clang-c/Index.h" ] && ls "$LIBDIR"/libclang.* >/dev/null 2>&1 && [ -d "$RESOURCEDIR/include" ]
+}
+
+check_llvm_config() {
+  command -v "$1" >/dev/null 2>&1 &&
+    check_llvm "$("$1" --includedir)" "$("$1" --libdir)" "$("$("$1" --bindir)/clang" -print-resource-dir 2>/dev/null)"
+}
+
+FOUND=""
+if [ "$LLVM_CONFIG" ]; then
+  check_llvm_config "$LLVM_CONFIG" && FOUND=yes
+else
+  for candidate in llvm-config $(ls -d /usr/lib/llvm-* 2>/dev/null | sort -V -r) \
+      /opt/homebrew/opt/llvm/bin/llvm-config /usr/local/opt/llvm/bin/llvm-config; do
+    if [ -d "$candidate" ]; then
+      # Ubuntu: libclang-dev in /usr/lib/llvm-<version>, possibly without llvm-config
+      check_llvm "$candidate/include" "$candidate/lib" "" && FOUND=yes
+    else
+      check_llvm_config "$candidate" && FOUND=yes
+    fi
+    [ "$FOUND" ] && break
+  done
 fi
 
-if [ -z "$PKG_LIBS" ]; then
+if [ -z "$FOUND" ]; then
   echo "------------------------------------------------------------------"
   echo "abitools requires libclang. Install it with:"
   echo "  deb (Debian, Ubuntu):  apt-get install libclang-dev"
@@ -52,4 +46,8 @@ if [ -z "$PKG_LIBS" ]; then
   exit 1
 fi
 
+echo "Using libclang from $LIBDIR"
+echo "#define CLANG_RESOURCE_DIR \"$RESOURCEDIR\"" > src/clang_config.h
+PKG_CPPFLAGS="-I$INCLUDEDIR"
+PKG_LIBS="-L$LIBDIR -lclang -Wl,-rpath,$LIBDIR"
 sed -e "s|@PKG_CPPFLAGS@|$PKG_CPPFLAGS|" -e "s|@PKG_LIBS@|$PKG_LIBS|" src/Makevars.in > src/Makevars
