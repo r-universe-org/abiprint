@@ -20,13 +20,16 @@ have changed and therefore which dependents need to be rebuilt. The
 headers that it provides. The **imports** of a package are the exports of its
 dependencies that it was built against.
 
-There are two ways to use this:
+abitools can be used in two ways:
 
-1. Compare the exports of a package with those of an older version of the
-   same package, to identify breaking changes in its classes or C functions.
-2. Compare the exports of a package with the imports of its dependents, to
-   identify the packages that were built against an older, incompatible
-   version and need to be rebuilt.
+1. **Review a release.** Compare the exports of a new version of a package
+   with those of the previous version, to see which classes and C functions
+   changed their ABI or were removed. This tells authors whether a release may
+   require rebuilding dependents.
+2. **Find stale dependents.** Compare the current exports of a package with
+   the imports that its dependents recorded when they were built. A dependent
+   needs to be rebuilt if it imports a class or C function that has changed or
+   was removed since. This is what package repositories need.
 
 ## Usage
 
@@ -61,18 +64,12 @@ to store and query:
 }
 ```
 
-`abi_check()` compares imports with exports, and returns what changed (no rows
-means no rebuild is needed). For a dependent (use case 2):
+`abi_check()` compares imports with exports, and returns what changed or was
+removed (no rows means nothing changed).
 
-```r
-abi_check(x)                     # x: the stored abi_list() of a dependent
-#>     package                 reason
-#>   S4Vectors S4 class Vector changed
-```
+### Review a release
 
-The current exports of the dependencies are computed from the installed
-packages, or can be passed as `exports` (e.g. from a repository API). For two
-versions of the same package (use case 1), pass the old exports as imports:
+Pass the exports of the previous version as imports:
 
 ```r
 abi_check(list(imports = old$exports), exports = new$exports)
@@ -83,6 +80,20 @@ abi_check(list(imports = old$exports), exports = new$exports)
 
 Here, `C headers changed` only means that some file in the `include`
 directory changed; the C functions show whether this affects the ABI.
+
+### Find stale dependents
+
+Pass the stored `abi_list()` of a dependent. The current exports of its
+dependencies are computed from the installed packages, or can be passed as
+`exports` (e.g. from a repository API):
+
+```r
+abi_check(x)
+#>     package                 reason
+#>   S4Vectors S4 class Vector changed
+```
+
+### Other functions
 
 `abi_deps()` shows why a dependency is critical: `S4 class`, `C API`,
 `linked library`, `headers` (header-only or static libraries, compiled into
