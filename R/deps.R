@@ -66,8 +66,9 @@ linkingto_type <- function(dep, libs, lib.loc){
   if (length(libs) && length(dep_path)) {
     # A C API is registered with R_RegisterCCallable() and called through
     # R_GetCCallable("pkg", "fun"), so the caller contains the package name.
+    # The linker may store it as the tail of a longer string ("_new_IRanges").
     if (contains_bytes(shared_objects(dep_path), "R_RegisterCCallable") &&
-        contains_string(libs, dep))
+        contains_string_end(libs, dep))
       return("C API")
     for (lib in shipped_libraries(dep_path)) {
       if (contains_string(libs, basename(lib), after = "/"))

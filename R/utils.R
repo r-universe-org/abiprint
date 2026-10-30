@@ -71,6 +71,11 @@ contains_string <- function(files, string, after = ""){
   FALSE
 }
 
+# String that is followed by a NUL byte, possibly the tail of a longer string
+contains_string_end <- function(files, string){
+  contains_bytes(files, c(charToRaw(string), as.raw(0)))
+}
+
 contains_bytes <- function(files, string){
   for (file in files) {
     if (length(grepRaw(string, readBin(file, "raw", file.size(file)), fixed = TRUE)))

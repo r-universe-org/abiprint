@@ -22,3 +22,13 @@ test_that("package names only match as separate C strings", {
   write_bytes(charToRaw("@rpath/libtbb.dylib"), nul)
   expect_true(abitools:::contains_string(file, "libtbb.dylib", after = "/"))
 })
+
+test_that("package names of C APIs also match as the tail of a string", {
+  file <- tempfile()
+  on.exit(unlink(file))
+  # Linkers merge "IRanges" into the tail of "_new_IRanges"
+  writeBin(c(as.raw(0), charToRaw("_new_IRanges"), as.raw(0)), file)
+  expect_false(abitools:::contains_string(file, "IRanges"))
+  expect_true(abitools:::contains_string_end(file, "IRanges"))
+  expect_false(abitools:::contains_string_end(file, "Ranges_"))
+})

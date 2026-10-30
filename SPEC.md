@@ -255,9 +255,9 @@ excluded.
 `D`:
 
 - If the shared libraries of `P` contain the bytes `R_RegisterCCallable`, and
-  the shared libraries of `D` contain `P` as a string (followed by a NUL byte,
-  and not preceded by a character from `[A-Za-z0-9._]`), then `P` is a
-  **C API** dependency. `D` imports `P::<name>()` for each C function exported
+  the shared libraries of `D` contain the bytes of `P` followed by a NUL byte
+  (also as the tail of a longer string: linkers merge the string `IRanges`
+  into `_new_IRanges`), then `P` is a **C API** dependency. `D` imports `P::<name>()` for each C function exported
   by `P` whose name is a string (section 4.2) in the shared libraries of `D`.
 - Otherwise, if `P` ships a shared library in its `lib` directory (a file
   with extension `.so`, `.dylib` or `.dll`, optionally followed by a version
