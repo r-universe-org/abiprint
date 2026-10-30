@@ -82,9 +82,9 @@ directory).
 
 ### 4.2 Parsing
 
-The source files of the compile commands whose bytes contain
-`R_RegisterCCallable` are parsed as a translation unit by libclang, with the
-arguments:
+If the shared libraries of the package contain the bytes
+`R_RegisterCCallable`, the source files of all its compile commands are parsed
+as a translation unit by libclang, with the arguments:
 
 ```
 -x c                        (for .c files, otherwise -x c++)

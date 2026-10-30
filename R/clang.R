@@ -46,15 +46,14 @@ clang_args <- function(args, dir){
   out
 }
 
-# All pairs of a name and a function in the source files that register C
-# functions (see find_pairs in clang.c)
+# All pairs of a name and a function in the compiled source files (see
+# find_pairs in clang.c). All files are parsed, because the registration may
+# be in a file that is included by another one (unity builds), and tables of
+# functions may be in a different file than the loop that registers them.
 clang_pairs <- function(commands, own, dirs){
   out <- list()
   for (cmd in commands) {
     if (!file.exists(cmd$file))
-      next
-    text <- readBin(cmd$file, "raw", file.size(cmd$file))
-    if (!length(grepRaw("R_RegisterCCallable", text, fixed = TRUE)))
       next
     lang <- if (grepl("\\.c$", cmd$file)) "c" else "c++"
     args <- c("-x", lang, "-resource-dir", clang_resource_dir(), cmd$args, "-w")
@@ -64,12 +63,9 @@ clang_pairs <- function(commands, own, dirs){
         args <- c(args, "-isysroot", sdk)
     }
     res <- .Call(abitools_clang_pairs, cmd$file, args, own, dirs)
-    if (length(res) && res[[4]] == 0) {
+    # Only files without errors: with errors, clang may substitute int for types
+    if (length(res) && res[[4]] == 0)
       out[[length(out) + 1]] <- data.frame(name = res[[1]], kind = res[[2]], sig = res[[3]])
-    } else if (length(res)) {
-      warning(sprintf("Could not parse %s: %s", basename(cmd$file),
-                      paste(na.omit(res[[5]]), collapse = "; ")), call. = FALSE)
-    }
   }
   do.call(rbind, c(list(data.frame(name = character(), kind = character(), sig = character())), out))
 }

@@ -27,8 +27,8 @@ signatures of the C functions that it registers with
 \details{
 The compile commands are logged with a compiler wrapper, which is set via
 \code{R_MAKEVARS_USER} (on top of the user's own Makevars, if any). After the
-installation, the source files that call \code{R_RegisterCCallable()} are parsed
-by libclang with the same arguments. In these files, the signature of a
+installation, the compiled source files are parsed by libclang with the
+same arguments (if the package registers C functions). In these files, the signature of a
 registered function is the type of the function that follows its name as a
 string literal: in the arguments of \code{R_RegisterCCallable()} (also through a
 macro or a wrapper function) or in a table such as \verb{\{"name", (DL_FUNC) &fun, 1\}}. Only the names for which \code{R_GetCCallable()} succeeds are

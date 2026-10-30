@@ -7,8 +7,8 @@
 #'
 #' The compile commands are logged with a compiler wrapper, which is set via
 #' `R_MAKEVARS_USER` (on top of the user's own Makevars, if any). After the
-#' installation, the source files that call `R_RegisterCCallable()` are parsed
-#' by libclang with the same arguments. In these files, the signature of a
+#' installation, the compiled source files are parsed by libclang with the
+#' same arguments (if the package registers C functions). In these files, the signature of a
 #' registered function is the type of the function that follows its name as a
 #' string literal: in the arguments of `R_RegisterCCallable()` (also through a
 #' macro or a wrapper function) or in a table such as `{"name", (DL_FUNC)
@@ -47,6 +47,8 @@ abi_install <- function(path, lib = .libPaths()[1], args = character(), quiet = 
     if (quiet) cat(readLines(output), sep = "\n")
     stop("Failed to install ", pkg)
   }
+  if (!length(list.files(logdir)) && dir.exists(file.path(path, "src")))
+    warning("No compile commands were logged for ", pkg, call. = FALSE)
   sigs <- record_c_functions(pkg, path, logdir, lib)
   invisible(sigs)
 }
@@ -81,18 +83,25 @@ record_c_functions <- function(pkg, path, logdir, lib){
   out
 }
 
-# The names for which R_GetCCallable() succeeds, after loading the package
+# The names for which R_GetCCallable() succeeds, after loading the installed
+# package. This runs in a new R process, because the package (or an older
+# version) may already be loaded in this one.
 #' @useDynLib abitools, .registration = TRUE
 registered_names <- function(pkg, lib, candidates){
-  if (isNamespaceLoaded(pkg)) {
-    unloadNamespace(pkg)
-    for (dll in getLoadedDLLs()) {
-      if (dll[["name"]] == pkg) dyn.unload(dll[["path"]])
-    }
-  }
-  loadNamespace(pkg, lib.loc = c(lib, .libPaths()))
-  ok <- vapply(candidates, function(name){
-    isTRUE(tryCatch(.Call(abitools_ccallable, pkg, name), error = function(e) FALSE))
-  }, logical(1))
-  sort(candidates[ok], method = "radix")
+  if (!length(candidates))
+    return(character())
+  input <- tempfile()
+  output <- tempfile()
+  on.exit(unlink(c(input, output)))
+  writeLines(candidates, input)
+  dll <- getLoadedDLLs()[["abitools"]][["path"]]
+  code <- sprintf(
+    '.libPaths(%s); loadNamespace("%s"); dyn.load("%s"); names <- readLines("%s");
+     ok <- vapply(names, function(n) isTRUE(tryCatch(.Call("abitools_ccallable", "%s", n, PACKAGE = "abitools"),
+       error = function(e) FALSE)), logical(1)); writeLines(names[ok], "%s")',
+    deparse1(c(lib, .libPaths())), pkg, dll, input, pkg, output)
+  status <- system2(file.path(R.home("bin"), "Rscript"), c("-e", shQuote(code)), stdout = FALSE, stderr = FALSE)
+  if (status != 0 || !file.exists(output))
+    stop("Failed to load ", pkg, " to find its registered C functions")
+  sort(readLines(output), method = "radix")
 }

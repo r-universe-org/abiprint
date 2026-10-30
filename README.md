@@ -133,13 +133,13 @@ function(UInt64,UInt64,Int32)->*{24,8|0:UInt64;64:UInt64;128:*Int32;}
 
 The signatures are recorded by `abi_install()`, which installs a package from
 source with a compiler wrapper that logs its compile commands. Afterwards, the
-source files that call `R_RegisterCCallable()` are parsed by libclang with the
-exact same flags, and the signature of a registered function is the type of
-the function that follows its name as a string literal: in a call to
-`R_RegisterCCallable()` (also through a macro or a wrapper function), or in a
-table such as `{"name", (DL_FUNC) &fun, 1}` that is registered in a loop. The
-signatures are stored in the installed package (`abi.json`). Packages that
-were not installed with `abi_install()` have no C function exports.
+compiled source files are parsed by libclang with the exact same flags, and
+the signature of a registered function is the type of the function that
+follows its name as a string literal: in a call to `R_RegisterCCallable()`
+(also through a macro or a wrapper function), or in a table such as `{"name",
+(DL_FUNC) &fun, 1}` that is registered in a loop. The signatures are stored in
+the installed package (`abi.json`). Packages that were not installed with
+`abi_install()` have no C function exports.
 
 **Headers:** a hash of all files in the `include` directory, used for
 `linked library` dependencies.
