@@ -91,9 +91,13 @@ the binary, so not critical), or `copied code` (see limitations).
 against the current definitions of their superclasses, without stored imports.
 
 See [rebuild-procedure.md](rebuild-procedure.md) for using this in a package
-repository, and [SPEC.md](SPEC.md) for the exact formats.
+repository.
 
 ## What is hashed
+
+The exact formats and rules are specified in [SPEC.md](SPEC.md), such that
+other implementations can reproduce the hashes. The specification is a draft
+and subject to change: hashes may differ between versions of abitools.
 
 **S4 classes:** the class name, the virtual flag, and the slots and
 superclasses (including inherited ones) with their packages. A dependent
