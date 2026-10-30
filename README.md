@@ -177,7 +177,10 @@ abitools requires libclang: `apt-get install libclang-dev` (Debian, Ubuntu),
   find (e.g. in an inactive `#ifdef` branch) get the hash of all headers, so
   any change in the headers marks their importers as dirty.
 - Calls to `R_GetCCallable()` of a package that is not in `LinkingTo` are not
-  detected.
+  imports, on purpose. Such packages declare the functions themselves (e.g.
+  dplyr for vctrs, SNPRelate for SeqArray), so a rebuild would not pick up a
+  changed signature: that requires a change in their source. The survey lists
+  these packages.
 - The class hash ignores prototypes and validity methods.
 - Code that a package copies from a dependency at install time (e.g.
   `f <- dep:::helper`, ggproto or S7 objects) is reported by `abi_deps()` but

@@ -269,6 +269,11 @@ excluded.
 - Otherwise, `D` imports nothing from `P` (header-only or static libraries are
   compiled into the binary of `D`).
 
+C functions of packages that are not in `LinkingTo` are never imported, even
+if `D` calls them with `R_GetCCallable()`. Without `LinkingTo`, `D` is not
+compiled against the headers of `P`, but declares the functions itself, so
+rebuilding `D` would not adapt it to a changed signature.
+
 ## 7. Checking
 
 Given the imports of a package and the current exports of its dependencies,
