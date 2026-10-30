@@ -34,9 +34,7 @@ static void putf(buf_t *b, const char *fmt, long long x){
 typedef struct {
   int ndirs;
   const char **dirs;   /* records and enums declared here are expanded */
-  const char *own;     /* the include directory of the package itself */
-  int nnames;
-  const char **names;  /* the names to look for */
+  const char *own;     /* the source directory of the package itself */
   /* results */
   int n, cap;
   char **found, **kind, **sig;
@@ -283,97 +281,99 @@ static void add_result(state_t *s, const char *name, const char *kind, CXType t)
   s->n++;
 }
 
-/* Exact match, or a match after a prefix such as 'M_' or '_p_' */
-static const char *match_name(state_t *s, const char *name, int *prefixed){
-  for (int i = 0; i < s->nnames; i++) {
-    if (strcmp(name, s->names[i]) == 0) {
-      *prefixed = 0;
-      return s->names[i];
-    }
-  }
-  const char *p = name + (name[0] == '_');
-  while (*p && *p != '_') p++;
-  if (*p == '_' && p > name + (name[0] == '_')) {
-    for (int i = 0; i < s->nnames; i++) {
-      if (strcmp(p + 1, s->names[i]) == 0) {
-        *prefixed = 1;
-        return s->names[i];
-      }
-    }
-  }
-  return NULL;
+static enum CXChildVisitResult last_child(CXCursor c, CXCursor parent, CXClientData data){
+  *(CXCursor *) data = c;
+  return CXChildVisit_Continue;
 }
 
-/* The string literal argument of R_GetCCallable("pkg", "name"). Literals
- * can be concatenated, as in "_" #name in Bioconductor stubs. */
-static enum CXChildVisitResult find_literal(CXCursor c, CXCursor parent, CXClientData data){
-  if (clang_getCursorKind(c) == CXCursor_StringLiteral) {
-    CXString str = clang_getCursorSpelling(c);
-    const char *in = clang_getCString(str);
-    char *out = data;
-    int quoted = 0;
-    size_t len = strlen(out);
-    for (; *in && len < 255; in++) {
-      if (*in == '"') quoted = !quoted;
-      else if (quoted) out[len++] = *in;
+/* An expression without casts, parentheses, and address-of operators */
+static CXCursor strip(CXCursor c){
+  for (;;) {
+    switch (clang_getCursorKind(c)) {
+    case CXCursor_UnexposedExpr:
+    case CXCursor_ParenExpr:
+    case CXCursor_CStyleCastExpr:
+    case CXCursor_CXXStaticCastExpr:
+    case CXCursor_CXXReinterpretCastExpr:
+    case CXCursor_CXXFunctionalCastExpr:
+    case CXCursor_UnaryOperator: {
+      CXCursor child = clang_getNullCursor();
+      clang_visitChildren(c, last_child, &child);
+      if (clang_Cursor_isNull(child)) return c;
+      c = child;
+      break;
     }
-    out[len] = 0;
-    clang_disposeString(str);
-    return CXChildVisit_Break;
-  }
-  return CXChildVisit_Recurse;
-}
-
-static int is_cast(enum CXCursorKind kind){
-  return kind == CXCursor_CStyleCastExpr || kind == CXCursor_CXXStaticCastExpr ||
-    kind == CXCursor_CXXReinterpretCastExpr || kind == CXCursor_CXXFunctionalCastExpr;
-}
-
-static enum CXChildVisitResult find_callable(CXCursor c, CXCursor parent, CXClientData data){
-  /* Only the cast directly around the call */
-  if (is_cast(clang_getCursorKind(c)))
-    return CXChildVisit_Continue;
-  if (clang_getCursorKind(c) == CXCursor_CallExpr) {
-    CXString name = clang_getCursorSpelling(c);
-    int is_call = strcmp(clang_getCString(name), "R_GetCCallable") == 0;
-    clang_disposeString(name);
-    if (is_call && clang_Cursor_getNumArguments(c) == 2) {
-      char *out = data;
-      out[0] = 0;
-      CXCursor arg = clang_Cursor_getArgument(c, 1);
-      if (clang_getCursorKind(arg) == CXCursor_StringLiteral) find_literal(arg, c, out);
-      else clang_visitChildren(arg, find_literal, out);
-      return CXChildVisit_Break;
+    default:
+      return c;
     }
   }
-  return CXChildVisit_Recurse;
+}
+
+/* The text of a string literal; literals can be concatenated ("_" #name) */
+static int literal_text(CXCursor c, char *out, size_t size){
+  c = strip(c);
+  if (clang_getCursorKind(c) != CXCursor_StringLiteral) return 0;
+  CXString str = clang_getCursorSpelling(c);
+  const char *in = clang_getCString(str);
+  size_t len = 0;
+  int quoted = 0;
+  for (; *in && len < size - 1; in++) {
+    if (*in == '"') quoted = !quoted;
+    else if (quoted) out[len++] = *in;
+  }
+  out[len] = 0;
+  clang_disposeString(str);
+  return 1;
+}
+
+/* The function that an expression refers to, e.g. (DL_FUNC) &fun */
+static int function_ref(CXCursor c, CXCursor *fun){
+  c = strip(c);
+  if (clang_getCursorKind(c) != CXCursor_DeclRefExpr) return 0;
+  CXCursor ref = clang_getCursorReferenced(c);
+  enum CXCursorKind kind = clang_getCursorKind(ref);
+  if (kind != CXCursor_FunctionDecl && kind != CXCursor_CXXMethod) return 0;
+  *fun = ref;
+  return 1;
+}
+
+typedef struct { int n; CXCursor items[64]; } children_t;
+
+static enum CXChildVisitResult collect_child(CXCursor c, CXCursor parent, CXClientData data){
+  children_t *ch = data;
+  if (ch->n < 64) ch->items[ch->n++] = c;
+  return CXChildVisit_Continue;
+}
+
+/* In the arguments of a call or the elements of an initializer list: a string
+ * literal followed by a reference to a function. This covers calls to
+ * R_RegisterCCallable("pkg", "name", fun) (also through macros or wrapper
+ * functions), and tables such as {"name", (DL_FUNC) &fun, 1}. */
+static void find_pairs(state_t *s, children_t *ch, const char *kind){
+  char name[256];
+  CXCursor fun;
+  for (int i = 0; i + 1 < ch->n; i++) {
+    if (literal_text(ch->items[i], name, sizeof name) && name[0] && function_ref(ch->items[i + 1], &fun))
+      add_result(s, name, kind, clang_getCursorType(fun));
+  }
 }
 
 static enum CXChildVisitResult visit(CXCursor c, CXCursor parent, CXClientData data){
   state_t *s = data;
-  /* Skip declarations from R, system and C++ library headers */
+  /* Only code of the package itself, not from R or system headers */
   if (!in_dir(c, s->own)) return CXChildVisit_Continue;
   enum CXCursorKind kind = clang_getCursorKind(c);
-  if (kind == CXCursor_FunctionDecl || kind == CXCursor_VarDecl) {
-    CXType t = clang_getCanonicalType(clang_getCursorType(c));
-    int is_function = t.kind == CXType_FunctionProto || t.kind == CXType_FunctionNoProto ||
-      (t.kind == CXType_Pointer && clang_getCanonicalType(clang_getPointeeType(t)).kind == CXType_FunctionProto);
-    if (is_function) {
-      CXString name = clang_getCursorSpelling(c);
-      int prefixed;
-      const char *match = match_name(s, clang_getCString(name), &prefixed);
-      if (match) add_result(s, match, prefixed ? "prefix" : "declaration", clang_getCursorType(c));
-      clang_disposeString(name);
-    }
-  } else if (is_cast(kind)) {
-    char name[256] = "";
-    clang_visitChildren(c, find_callable, name);
-    int prefixed;
-    const char *match = name[0] ? match_name(s, name, &prefixed) : NULL;
-    if (match && !prefixed) {
-      add_result(s, match, "callsite", clang_getCursorType(c));
-      return CXChildVisit_Continue;
-    }
+  children_t ch = {0};
+  if (kind == CXCursor_CallExpr) {
+    int n = clang_Cursor_getNumArguments(c);
+    for (int i = 0; i < n && i < 64; i++) ch.items[ch.n++] = clang_Cursor_getArgument(c, i);
+    CXString callee = clang_getCursorSpelling(c);
+    int registers = strcmp(clang_getCString(callee), "R_RegisterCCallable") == 0;
+    clang_disposeString(callee);
+    find_pairs(s, &ch, registers ? "register" : "pair");
+  } else if (kind == CXCursor_InitListExpr) {
+    clang_visitChildren(c, collect_child, &ch);
+    find_pairs(s, &ch, "pair");
   }
   return CXChildVisit_Recurse;
 }
@@ -384,20 +384,19 @@ static const char **as_strings(SEXP x){
   return out;
 }
 
-/* Parse a header with the given compiler arguments, and find the signatures
- * of the given names. Returns NULL if the header could not be parsed. */
-SEXP abitools_clang_signatures(SEXP file, SEXP args, SEXP names, SEXP own, SEXP dirs){
+/* Parse a source file of a package with the given compiler arguments, and find
+ * the pairs of a name and a function in it (see find_pairs). Returns NULL if
+ * the file could not be parsed. */
+SEXP abitools_clang_pairs(SEXP file, SEXP args, SEXP own, SEXP dirs){
   state_t s = {0};
   s.own = CHAR(STRING_ELT(own, 0));
   s.ndirs = Rf_length(dirs);
   s.dirs = as_strings(dirs);
-  s.nnames = Rf_length(names);
-  s.names = as_strings(names);
   CXIndex index = clang_createIndex(0, 0);
   CXTranslationUnit tu = NULL;
   enum CXErrorCode err = clang_parseTranslationUnit2(index, CHAR(STRING_ELT(file, 0)),
     as_strings(args), Rf_length(args), NULL, 0,
-    CXTranslationUnit_KeepGoing | CXTranslationUnit_Incomplete, &tu);
+    CXTranslationUnit_KeepGoing, &tu);
   if (err != CXError_Success || !tu) {
     clang_disposeIndex(index);
     return R_NilValue;

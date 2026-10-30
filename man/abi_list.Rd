@@ -27,10 +27,10 @@ package was built, in the library that it was built with.
 The \strong{exports} are the parts of the package that dependents may copy at
 build time: a hash of each S4 class definition, a hash of the C headers in
 its \code{include} directory, and a hash of each C function that it registers
-with \code{R_RegisterCCallable()}. The hash of a C function covers its
-declaration in the headers, and the definitions of the types that it uses.
-Unlike the version, these hashes only change when something changes that
-affects dependents.
+with \code{R_RegisterCCallable()}. The hash of a C function covers its signature
+and the definitions of the types that it uses. C functions are only known
+for packages that were installed with \code{\link[=abi_install]{abi_install()}}. Unlike the version,
+these hashes only change when something changes that affects dependents.
 
 The \strong{imports} are the exports of its dependencies that the package copied
 when it was built: the classes that it extends, the C functions of \verb{C API}

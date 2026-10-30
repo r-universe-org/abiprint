@@ -1,42 +1,17 @@
-# Hashes of the C functions that a package registers with R_RegisterCCallable().
-# The hash covers the signature of the function as described by libclang (see
-# clang.R and SPEC.md). For functions that are not found in the headers, the
-# hash of all headers is used instead.
-c_function_hashes <- function(pkg, path, lib.loc = NULL){
-  libs <- shared_objects(path)
-  if (!length(libs) || !contains_bytes(libs, "R_RegisterCCallable"))
+# Hashes of the C functions that a package registers with R_RegisterCCallable(),
+# from the signatures that abi_install() stored in the installed package. For
+# packages that were installed otherwise, these are unknown.
+c_function_hashes <- function(pkg, path){
+  file <- file.path(path, "abi.json")
+  if (!file.exists(file))
     return(character())
-  names <- registered_callables(pkg, path, lib.loc)
-  if (!length(names))
+  functions <- jsonlite::fromJSON(file)$functions
+  if (!length(functions) || !nrow(functions))
     return(character())
-  fallback <- header_hash(path) %||% ""
-  sigs <- clang_signatures(pkg, path, names, lib.loc)
-  hashes <- ifelse(is.na(sigs), fallback, vapply(sigs, hash_text, ""))
-  names(hashes) <- paste0(pkg, "::", names, "()")
+  functions <- functions[!is.na(functions$signature), ]
+  hashes <- vapply(functions$signature, hash_text, "", USE.NAMES = FALSE)
+  names(hashes) <- paste0(pkg, "::", functions$name, "()")
   hashes
-}
-
-# There is no list of registered functions, so try the identifiers that are
-# stored as strings in the shared library of the package, and that are also
-# found in its headers (possibly with a prefix, see callable_variants()).
-# Trying a name that is not registered is slow, so the headers narrow it down.
-#' @useDynLib abitools, .registration = TRUE
-registered_callables <- function(pkg, path, lib.loc = NULL){
-  libs <- shared_objects(path)
-  if (!length(libs) || !contains_bytes(libs, "R_RegisterCCallable"))
-    return(character())
-  words <- header_words(path)
-  if (!length(words))
-    return(character())
-  loaded <- tryCatch(loadNamespace(pkg, lib.loc = lib.loc), error = function(e) NULL)
-  if (is.null(loaded))
-    return(character())
-  words <- c(words, paste0("_", words), paste0("_", pkg, "_", words), sub("^_?[A-Za-z0-9]+_", "", words))
-  candidates <- intersect(binary_strings(libs), words)
-  ok <- vapply(candidates, function(name){
-    isTRUE(tryCatch(.Call(abitools_ccallable, pkg, name), error = function(e) FALSE))
-  }, logical(1))
-  sort(candidates[ok], method = "radix")
 }
 
 # Identifiers in a binary that are stored as separate C strings. Cached,
@@ -93,13 +68,4 @@ chunk_strings <- function(bytes){
   chars <- bytes[sequence(ends[keep] - starts[keep] + 2L, from = starts[keep])]
   chars[chars == 0] <- as.raw(10)
   strsplit(rawToChar(chars), "\n", fixed = TRUE)[[1]]
-}
-
-# All identifiers in the headers of a package, also in comments and strings
-header_words <- function(path){
-  files <- list.files(file.path(path, "include"), recursive = TRUE, full.names = TRUE)
-  unique(unlist(lapply(files, function(file){
-    text <- readLines(file, warn = FALSE)
-    regmatches(text, gregexpr("[A-Za-z_][A-Za-z0-9_]*", text, useBytes = TRUE))
-  })))
 }

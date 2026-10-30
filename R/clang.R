@@ -1,101 +1,88 @@
-# Signatures of C functions with libclang (see SPEC.md). This runs the
-# preprocessor and describes the actual ABI: the canonical types of the return
-# value and the parameters, and for structs that are defined in the headers of
-# the package (or its LinkingTo dependencies) their size, alignment and field
-# offsets.
+# Signatures of the C functions that a package registers, from its own sources
+# (see SPEC.md). The source files are parsed by libclang with the arguments of
+# the compile commands that were logged while the package was installed (see
+# abi_install()), and the types are described with the rules in clang.c.
 
 clang_resource_dir <- function(){
   .Call(abitools_clang_resource_dir)
 }
 
-# Returns the signature of each of the registered functions of a package, or
-# NA for the functions that were not found.
-clang_signatures <- function(pkg, path, names, lib.loc = NULL){
-  out <- rep(NA_character_, length(names))
-  names(out) <- names
-  if (!length(names))
-    return(out)
-  variants <- lapply(names, callable_variants, pkg = pkg)
-  config <- clang_config(path, lib.loc)
-  for (file in entry_headers(config$own, unique(unlist(variants)))) {
-    res <- clang_parse(file.path(config$own, file), unique(unlist(variants)), config)
-    if (is.null(res))
-      next
-    # Per function, use the first header (that parses without errors) that has it
-    for (i in which(is.na(out))) {
-      out[i] <- pick_signature(res, variants[[i]])
+# The logged compile commands: the directory, the source file, and the
+# arguments for libclang (include directories, macros, language standard)
+compile_commands <- function(logdir){
+  files <- sort(list.files(logdir, full.names = TRUE), method = "radix")
+  out <- lapply(files, function(file){
+    fields <- strsplit(rawToChar(readBin(file, "raw", file.size(file))), "\037", fixed = TRUE)[[1]]
+    dir <- fields[1]
+    args <- fields[-1]
+    src <- args[grepl("\\.(c|cc|cpp|cxx|C)$", args)]
+    if (!"-c" %in% args || length(src) != 1)
+      return(NULL)
+    list(dir = dir, file = normalizePath(file.path(dir, src), mustWork = FALSE),
+         args = clang_args(args, dir))
+  })
+  Filter(Negate(is.null), out)
+}
+
+# Keep the arguments that affect parsing, with paths relative to 'dir'
+clang_args <- function(args, dir){
+  out <- character()
+  path_flags <- c("-I", "-isystem", "-iquote", "-include", "-isysroot")
+  i <- 1
+  while (i <= length(args)) {
+    a <- args[i]
+    flag <- path_flags[vapply(path_flags, startsWith, logical(1), x = a)]
+    if (length(flag)) {
+      flag <- flag[which.max(nchar(flag))]
+      value <- if (a == flag) { i <- i + 1; args[i] } else substring(a, nchar(flag) + 1)
+      if (!grepl("^/", value))
+        value <- file.path(dir, value)
+      out <- c(out, flag, value)
+    } else if (grepl("^-(D|U)", a) || grepl("^-std=", a)) {
+      out <- c(out, a)
     }
-    if (!anyNA(out))
-      break
+    i <- i + 1
   }
   out
 }
 
-# Prefer the cast at a call site of R_GetCCallable("pkg", "name"): this is the
-# type that dependents actually use to call the function. Then a declaration
-# of the registered name (or the name without the prefix that stub macros
-# add), and then a declaration with a prefix (M_ in Matrix). Declarations are
-# less reliable in C++, where other namespaces may have functions with the
-# same name.
-pick_signature <- function(res, variants){
-  for (kind in c("callsite", "declaration", "prefix")) {
-    for (name in variants) {
-      sig <- res$sig[res$kind == kind & res$name == name]
+# All pairs of a name and a function in the source files that register C
+# functions (see find_pairs in clang.c)
+clang_pairs <- function(commands, own, dirs){
+  out <- list()
+  for (cmd in commands) {
+    if (!file.exists(cmd$file))
+      next
+    text <- readBin(cmd$file, "raw", file.size(cmd$file))
+    if (!length(grepRaw("R_RegisterCCallable", text, fixed = TRUE)))
+      next
+    lang <- if (grepl("\\.c$", cmd$file)) "c" else "c++"
+    args <- c("-x", lang, "-resource-dir", clang_resource_dir(), cmd$args, "-w")
+    if (Sys.info()[["sysname"]] == "Darwin" && !"-isysroot" %in% args) {
+      sdk <- tryCatch(system2("xcrun", "--show-sdk-path", stdout = TRUE, stderr = FALSE), error = function(e) NULL)
+      if (length(sdk))
+        args <- c(args, "-isysroot", sdk)
+    }
+    res <- .Call(abitools_clang_pairs, cmd$file, args, own, dirs)
+    if (length(res) && res[[4]] == 0) {
+      out[[length(out) + 1]] <- data.frame(name = res[[1]], kind = res[[2]], sig = res[[3]])
+    } else if (length(res)) {
+      warning(sprintf("Could not parse %s: %s", basename(cmd$file),
+                      paste(na.omit(res[[5]]), collapse = "; ")), call. = FALSE)
+    }
+  }
+  do.call(rbind, c(list(data.frame(name = character(), kind = character(), sig = character())), out))
+}
+
+# The signature of each name: from the arguments of R_RegisterCCallable() if
+# possible, otherwise from other pairs (tables, wrapper functions)
+pick_signatures <- function(pairs, names){
+  vapply(names, function(name){
+    for (kind in c("register", "pair")) {
+      sig <- pairs$sig[pairs$kind == kind & pairs$name == name]
       if (length(sig))
         return(paste(sort(unique(sig), method = "radix"), collapse = "\n"))
     }
-  }
-  NA_character_
-}
-
-callable_variants <- function(name, pkg){
-  unique(c(name, sub(paste0("^_", pkg, "_"), "", name), sub("^_", "", name)))
-}
-
-# Parse a header as C, or as C++ if that fails. Returns NULL unless it parses
-# without errors: with errors, clang may substitute 'int' for unknown types.
-clang_parse <- function(file, names, config){
-  cpp_only <- grepl("\\.(hpp|hh|cc|cpp)$|/[^./]+$", file)
-  for (lang in if (cpp_only) "c++" else c("c", "c++")) {
-    std <- if (lang == "c++") c("-std=gnu++17", "-DR_NO_REMAP") else "-std=gnu17"
-    args <- c("-x", lang, std, config$args)
-    res <- .Call(abitools_clang_signatures, file, args, names, config$own, config$dirs)
-    if (length(res) && res[[4]] == 0)
-      return(data.frame(name = res[[1]], kind = res[[2]], sig = res[[3]]))
-  }
-  NULL
-}
-
-# Compiler arguments as for a package that links to this one: the include
-# directories of R, the package, and its own LinkingTo dependencies. Headers
-# of R packages expect that the R headers were included before.
-clang_config <- function(path, lib.loc = NULL){
-  desc <- file.path(path, "DESCRIPTION")
-  linkingto <- if (file.exists(desc)) parse_deps(read_description(path)$LinkingTo) else character()
-  dirs <- file.path(c(path, find.package(linkingto, lib.loc, quiet = TRUE)), "include")
-  dirs <- normalizePath(dirs[dir.exists(dirs)])
-  args <- c("-resource-dir", clang_resource_dir(), paste0("-I", R.home("include")),
-            paste0("-I", dirs), "-w", "-include", "Rinternals.h", "-include", "R_ext/Rdynload.h")
-  if (Sys.info()[["sysname"]] == "Darwin") {
-    sdk <- tryCatch(system2("xcrun", "--show-sdk-path", stdout = TRUE, stderr = FALSE), error = function(e) NULL)
-    if (length(sdk))
-      args <- c(args, "-isysroot", sdk)
-  }
-  list(args = args, dirs = dirs, own = normalizePath(file.path(path, "include")))
-}
-
-# The headers to parse: the files at the top of the include directory (or
-# one level down if there are none), and other files that mention the names
-entry_headers <- function(inc, names){
-  files <- list.files(inc, recursive = TRUE)
-  files <- files[grepl("\\.(h|hpp|hh|c|cc|cpp)$|^[^.]+$", basename(files))]
-  if (!length(files))
-    return(character())
-  depth <- lengths(regmatches(files, gregexpr("/", files)))
-  top <- files[depth == min(depth)]
-  mentions <- files[vapply(file.path(inc, files), function(file){
-    text <- paste(readLines(file, warn = FALSE), collapse = "\n")
-    any(vapply(names, grepl, logical(1), x = text, fixed = TRUE))
-  }, logical(1))]
-  unique(c(sort(top, method = "radix"), sort(mentions, method = "radix")))
+    NA_character_
+  }, "", USE.NAMES = FALSE)
 }

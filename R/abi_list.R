@@ -7,10 +7,10 @@
 #' The **exports** are the parts of the package that dependents may copy at
 #' build time: a hash of each S4 class definition, a hash of the C headers in
 #' its `include` directory, and a hash of each C function that it registers
-#' with `R_RegisterCCallable()`. The hash of a C function covers its
-#' declaration in the headers, and the definitions of the types that it uses.
-#' Unlike the version, these hashes only change when something changes that
-#' affects dependents.
+#' with `R_RegisterCCallable()`. The hash of a C function covers its signature
+#' and the definitions of the types that it uses. C functions are only known
+#' for packages that were installed with [abi_install()]. Unlike the version,
+#' these hashes only change when something changes that affects dependents.
 #'
 #' The **imports** are the exports of its dependencies that the package copied
 #' when it was built: the classes that it extends, the C functions of `C API`
@@ -44,7 +44,7 @@ abi_exports <- function(pkg, lib.loc = NULL){
   path <- find.package(pkg, lib.loc)
   defs <- class_defs(load_rdb(path, pkg))
   headers <- header_hash(path)
-  functions <- c_function_hashes(pkg, path, lib.loc)
+  functions <- c_function_hashes(pkg, path)
   abi_table(
     key = c(if (length(headers)) paste0(pkg, "/include"), if (length(defs)) paste0(pkg, "::", names(defs)), names(functions)),
     hash = c(headers, vapply(defs, class_hash, "", USE.NAMES = FALSE), unname(functions))
@@ -66,7 +66,7 @@ abi_imports <- function(pkg, lib.loc = NULL){
       strings <- strings %||% binary_strings(shared_objects(path))
       functions <- grep("\\(\\)$", exports$key, value = TRUE)
       used <- functions[sub("^[^:]*::(.*)\\(\\)$", "\\1", functions) %in% strings]
-      wanted <- c(wanted, if (length(used)) used else paste0(dep, "/include"))
+      wanted <- c(wanted, used)
     }
     if ("linked library" %in% rows$type)
       wanted <- c(wanted, paste0(dep, "/include"))

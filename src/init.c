@@ -8,12 +8,12 @@ SEXP abitools_ccallable(SEXP pkg, SEXP name){
 }
 
 SEXP abitools_clang_resource_dir(void);
-SEXP abitools_clang_signatures(SEXP, SEXP, SEXP, SEXP, SEXP);
+SEXP abitools_clang_pairs(SEXP, SEXP, SEXP, SEXP);
 
 static const R_CallMethodDef CallEntries[] = {
   {"abitools_ccallable", (DL_FUNC) &abitools_ccallable, 2},
   {"abitools_clang_resource_dir", (DL_FUNC) &abitools_clang_resource_dir, 0},
-  {"abitools_clang_signatures", (DL_FUNC) &abitools_clang_signatures, 5},
+  {"abitools_clang_pairs", (DL_FUNC) &abitools_clang_pairs, 4},
   {NULL, NULL, 0}
 };
 

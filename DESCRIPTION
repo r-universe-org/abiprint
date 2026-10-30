@@ -18,10 +18,10 @@ SystemRequirements: libclang (deb: libclang-dev, rpm: clang-devel, brew: llvm)
 Depends:
     R (>= 4.5.0)
 Imports:
+    jsonlite,
     methods,
     tools
 Suggests:
-    jsonlite,
     testthat (>= 3.0.0)
 Config/testthat/edition: 3
 Roxygen: list(markdown = TRUE)

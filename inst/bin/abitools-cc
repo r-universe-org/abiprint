@@ -1,0 +1,8 @@
+#!/bin/sh
+# Compiler wrapper used by abi_install(): log the working directory and the
+# arguments of the compile command (one file per command, fields separated by
+# the unit separator 0x1F), then run it.
+if [ -n "$ABITOOLS_COMPILE_LOG" ]; then
+  printf '%s\037' "$PWD" "$@" > "$(mktemp "$ABITOOLS_COMPILE_LOG/command.XXXXXXXX")"
+fi
+exec "$@"

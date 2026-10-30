@@ -2,6 +2,7 @@
 
 export(abi_check)
 export(abi_deps)
+export(abi_install)
 export(abi_list)
 export(stale_classes)
 useDynLib(abitools, .registration = TRUE)

@@ -67,111 +67,88 @@ indirect ones (as stored in the class definition by R). `<package>` is the
 
 ## 4. C functions
 
-### 4.1 Registered functions
+The C functions of a package are recorded when it is installed from source,
+because this requires its source files and the compiler flags it was built
+with. Packages that were installed otherwise have no C function exports.
 
-A package exports a C function `<name>` if:
+### 4.1 Compile commands
 
-1. its shared libraries contain the bytes `R_RegisterCCallable`,
-2. `<name>` is a *string* (section 4.2) in its shared libraries,
-3. `<name>` is a *derived name* of an identifier in its headers: for an
-   identifier `w` (a match of `[A-Za-z_][A-Za-z0-9_]*` anywhere in a file in
-   the `include` directory), the derived names are `w`, `_w`, `_<package>_w`,
-   and `w` without a prefix that matches `^_?[A-Za-z0-9]+_`,
-4. after loading the namespace of the package, `R_GetCCallable("<package>",
-   "<name>")` succeeds.
+The package is installed with `R CMD INSTALL`, with the C and C++ compilers
+(`CC`, `CXX`, `CXX11`, ..., `CXX23`) wrapped by a program that logs the working
+directory and the arguments of each command. A compile command is a logged
+command with the argument `-c` and exactly one argument with extension `.c`,
+`.cc`, `.cpp`, `.cxx` or `.C` (the source file, relative to the working
+directory).
 
-The hash is `hash(signature)`, with the signature from section 5. If no
-signature is found, the hash is the hash of the headers (section 2).
+### 4.2 Parsing
 
-### 4.2 Strings in shared libraries
+The source files of the compile commands whose bytes contain
+`R_RegisterCCallable` are parsed as a translation unit by libclang, with the
+arguments:
+
+```
+-x c                        (for .c files, otherwise -x c++)
+-resource-dir <the resource directory of the libclang>
+<the arguments of the compile command that start with -I, -isystem, -iquote,
+ -include, -isysroot, -D, -U, or -std=, in order; relative paths are made
+ absolute with respect to the working directory of the command>
+-w
+-isysroot <SDK path>        (macOS only, unless already given)
+```
+
+A file is only used if it parses without diagnostics of severity error or
+higher.
+
+The *package directories* are the source directory of the package (which
+contains its `DESCRIPTION`), and the `include` directories of its `LinkingTo`
+dependencies.
+
+### 4.3 Names and functions
+
+In a parsed file, only code whose location (after macro expansion) is in the
+source directory of the package is considered. In the arguments of a call, and
+in the elements of an initializer list, a *pair* is a string literal that is
+directly followed by an expression that refers to a function. Both are taken
+after removing casts, parentheses, and unary operators (such as `&`), and
+concatenated string literals (e.g. `"_" "name"`) form one name. This covers:
+
+- `R_RegisterCCallable("pkg", "name", (DL_FUNC) &fun)`, also through a macro
+  (e.g. `#define REG(f) R_RegisterCCallable("pkg", #f, (DL_FUNC) f)`),
+- wrapper functions, e.g. `register_fn("name", (DL_FUNC) &fun)`,
+- tables that are registered in a loop, e.g. `{"name", (DL_FUNC) &fun, 1}`.
+
+A pair is of kind *register* if it is in the arguments of a call to
+`R_RegisterCCallable`, otherwise of kind *pair*.
+
+### 4.4 Registered functions and signatures
+
+The package exports a C function `<name>` if `<name>` is the name of a pair,
+and `R_GetCCallable("<package>", "<name>")` succeeds after loading the
+installed package.
+
+Its signature is the description (section 5) of the type of the function of
+the pairs of kind register with this name, or if there are none, of the pairs
+of kind pair. If there are several different descriptions, the signature is
+these descriptions, sorted and joined with a newline. The hash is
+`hash(signature)`.
+
+The signatures are stored in the installed package, in the file `abi.json`:
+
+```json
+{"functions": [{"name": "new_IntAE", "signature": "function(...)->..."}, ...]}
+```
+
+### 4.5 Strings in shared libraries
 
 A *string* in a shared library is a maximal run of 2 to 128 bytes from
 `[A-Za-z0-9_]` that is followed by a NUL byte. (It is usually also preceded by
 a NUL byte, but not if it is the first string in a section, which may follow
 machine code.)
 
-## 5. Signatures
-
-The signature of a registered function is found by parsing the headers of the
-package with libclang.
-
-### 5.1 Names to look for
-
-For a registered name `<name>`, the *variants* are, in this order and without
-duplicates: `<name>`; `<name>` without the prefix `_<package>_`; and `<name>`
-without the prefix `_`. These cover the prefixes that stub macros add to the
-registered name (e.g. `_new_IntAE` for `new_IntAE` in Bioconductor, and
-`_pkg_fun` in Rcpp interfaces).
-
-### 5.2 Headers to parse
-
-The candidate headers are the files in the `include` directory (recursively)
-with extension `.h`, `.hpp`, `.hh`, `.c`, `.cc`, `.cpp`, or no extension.
-They are parsed in this order, without duplicates:
-
-1. the candidates at the lowest directory depth, sorted by path,
-2. the candidates whose text contains any variant of any registered name,
-   sorted by path.
-
-Parsing stops when a signature was found for every registered name.
-
-### 5.3 Parsing
-
-Each header is parsed as a translation unit by libclang with the arguments:
-
-```
--x c -std=gnu17            (C)
--x c++ -std=gnu++17 -DR_NO_REMAP   (C++)
--resource-dir <the resource directory of the libclang>
--I<R include directory>
--I<include directory of the package>
--I<include directory of each LinkingTo dependency of the package, in order>
--w
--include Rinternals.h
--include R_ext/Rdynload.h
--isysroot <SDK path>        (macOS only)
-```
-
-Headers with extension `.hpp`, `.hh`, `.cc`, `.cpp`, or no extension are
-parsed as C++. Other headers are parsed as C, and if that gives errors, as
-C++. A header is only used if it parses without diagnostics of severity error
-or higher.
-
-The *package directories* are the include directories of the package and of
-its LinkingTo dependencies.
-
-### 5.4 Candidate signatures
-
-In a parsed header, only declarations and expressions whose location (after
-macro expansion) is in a file in the include directory of the package itself
-are considered:
-
-- **callsite**: a cast (C-style, `static_cast`, `reinterpret_cast`, or a
-  functional cast) whose operand contains a call to `R_GetCCallable` with two
-  arguments, without another cast in between, where the second argument is a
-  string literal (or concatenated literals) equal to a variant. The signature
-  is the description of the type of the cast.
-- **declaration**: a function declaration or variable declaration whose
-  canonical type is a function type or a pointer to a function type, and
-  whose name equals a variant.
-- **prefix**: as declaration, but the name is `<prefix>_<variant>` where
-  `<prefix>` is a non-empty run of characters other than `_`, optionally
-  preceded by `_` (e.g. `M_cholmod_aat` in Matrix, `_p_rxLlikBeta` in
-  rxode2ll).
-
-For each registered name, the signature is taken from the first header (in
-the order of section 5.2) that has a candidate for it. Within that header, the
-first kind in the order callsite, declaration, prefix, and within the kind the
-first variant in the order of section 5.1, that has candidates is used. If
-there are several (different) candidates of that kind and variant, the
-signature is their descriptions, sorted and joined with a newline.
-
-### 5.5 Type descriptions
+## 5. Type descriptions
 
 A type is described by the following rules, applied to its canonical type
-(typedefs are resolved, and qualifiers such as `const` are ignored). If the
-type of a candidate is a pointer to a function, the function type is
-described.
+(typedefs are resolved, and qualifiers such as `const` are ignored).
 
 | type | description |
 |------|-------------|
@@ -253,13 +230,13 @@ excluded.
 
 **C APIs.** For each package `P` in the `LinkingTo`, `Imports`, or `Depends`
 field of `D`: if the shared libraries of `P` contain the bytes
-`R_RegisterCCallable`, and `P` is a string (section 4.2) in the shared
+`R_RegisterCCallable`, and `P` is a string (section 4.5) in the shared
 libraries of `D` (for names that contain a `.`: the name followed by a NUL
 byte, and not preceded by a character from `[A-Za-z0-9._]`), then `P` is a
 **C API** dependency. `D` imports `P::<name>()` for each C function exported
-by `P` whose name is a string in the shared libraries of `D`. If there are
-none, `D` imports `P/include` instead (if `P` exports it). Some packages call
-a C API without `LinkingTo`, with their own declarations of the functions.
+by `P` whose name is a string in the shared libraries of `D`. Some packages
+call a C API without `LinkingTo`, with their own declarations of the
+functions.
 
 **LinkingTo dependencies.** For each other package `P` in the `LinkingTo`
 field of `D`:
@@ -289,9 +266,12 @@ matter.
 
 - Objects in a package that hold code of a dependency (e.g. `f <- dep:::g`)
   are reported by `abi_deps()` but not hashed.
-- Registered C functions of a package that are not declared in its headers
-  (or that have no headers at all) cannot be hashed.
+- C functions of packages that were not installed with the compile commands
+  logged (section 4.1) are not exported, so dependents do not import them.
+- C functions that are registered with a name that is computed at runtime
+  (not a string literal next to the function) are not exported.
 - Signatures depend on the platform ABI (sizes and alignments), and C++ types
   of the standard library (such as `std::string`) differ between libc++ and
-  libstdc++. Results should only be compared between packages that were
-  inspected on the same platform, with the same R and libclang setup.
+  libstdc++. Signatures also depend on the compiler flags of the package.
+  Results should only be compared between packages that were built on the
+  same platform, with the same R and libclang setup.

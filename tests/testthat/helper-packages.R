@@ -1,6 +1,7 @@
 # Create and install small test packages in a temporary library
 make_pkg <- function(root, name, version, code, namespace, imports = NULL,
-                     linkingto = NULL, header = NULL, src = NULL){
+                     linkingto = NULL, header = NULL, src = NULL,
+                     makevars = "PKG_CPPFLAGS = -I../inst/include"){
   dir <- file.path(root, name)
   unlink(dir, recursive = TRUE)
   dir.create(file.path(dir, "R"), recursive = TRUE)
@@ -20,21 +21,19 @@ make_pkg <- function(root, name, version, code, namespace, imports = NULL,
   if (length(src)) {
     dir.create(file.path(dir, "src"))
     writeLines(src, file.path(dir, "src", paste0(name, ".c")))
-    writeLines("PKG_CPPFLAGS = -I../inst/include", file.path(dir, "src", "Makevars"))
+    writeLines(makevars, file.path(dir, "src", "Makevars"))
   }
   dir
 }
 
 install_pkg <- function(dir, lib){
-  for (pkg in c("conspkg", "provpkg", "cconspkg", "cprovpkg")) {
+  for (pkg in c("conspkg", "provpkg", "cconspkg", "cprovpkg", "regstyles")) {
     if (isNamespaceLoaded(pkg)) unloadNamespace(pkg)
     dll <- getLoadedDLLs()[[pkg]]
     if (!is.null(dll)) dyn.unload(dll[["path"]])
   }
-  status <- system2(file.path(R.home("bin"), "R"),
-    c("CMD", "INSTALL", "--no-test-load", paste0("--library=", shQuote(lib)), shQuote(dir)),
-    env = paste0("R_LIBS=", shQuote(lib)), stdout = FALSE, stderr = FALSE)
-  stopifnot(status == 0)
+  with_lib(lib, abi_install(dir, lib, quiet = TRUE))
+  invisible()
 }
 
 make_provider <- function(root, version, slots = 'representation(x = "numeric")', header = "#define PROV 1"){

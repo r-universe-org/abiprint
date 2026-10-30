@@ -34,8 +34,10 @@ abitools can be used in two ways:
 
 ## Usage
 
-`abi_list()` returns the exports and imports of an installed package. Run it
-right after the package was built, in the library that it was built with.
+Install packages with `abi_install()`, which records the signatures of their
+C functions (see below). `abi_list()` returns the exports and imports of an
+installed package. Run it right after the package was built, in the library
+that it was built with.
 
 ```r
 abi_list("minqa")
@@ -118,31 +120,35 @@ imports the classes that it extends.
 **C functions:** every function that a package registers with
 `R_RegisterCCallable()`. A dependent imports the functions whose names appear
 as strings in its shared library (the names that it passes to
-`R_GetCCallable()`). The hash describes the signature of the function, as
-parsed from the headers of the package by libclang (with the preprocessor, and
-the include directories of R and of the package's own `LinkingTo`
-dependencies): canonical types of the return value and parameters, and for
-structs defined in these headers their size, alignment and field offsets.
-Names, qualifiers, formatting, and macros do not matter; a changed array size
-from a `#define` or a reordered field does. For example, for
-`S4Vectors::_new_IntAE()`:
+`R_GetCCallable()`). The hash describes the signature of the function:
+canonical types of the return value and parameters, and for structs defined
+in the package (or the headers of its `LinkingTo` dependencies) their size,
+alignment and field offsets. Names, qualifiers, formatting, and macros do not
+matter; a changed array size from a `#define` or a reordered field does. For
+example, for `S4Vectors::_new_IntAE()`:
 
 ```
 function(UInt64,UInt64,Int32)->*{24,8|0:UInt64;64:UInt64;128:*Int32;}
 ```
 
-The signature is taken from the cast at a call site of `R_GetCCallable()` in
-the headers if there is one, else from a declaration. This covers the
-different ways in which packages declare a C API: plain declarations (cli,
-xts), macros as return type (nloptr), stub prefixes such as `_fun` (Bioconductor),
-`_pkg_fun` (Rcpp interfaces) or `M_fun` (Matrix), function pointers (libgeos,
-PreciseSums), and casts at call sites (Rcpp, Matrix, RNifti). Functions that
-are not found get the hash of all headers.
+The signatures are recorded by `abi_install()`, which installs a package from
+source with a compiler wrapper that logs its compile commands. Afterwards, the
+source files that call `R_RegisterCCallable()` are parsed by libclang with the
+exact same flags, and the signature of a registered function is the type of
+the function that follows its name as a string literal: in a call to
+`R_RegisterCCallable()` (also through a macro or a wrapper function), or in a
+table such as `{"name", (DL_FUNC) &fun, 1}` that is registered in a loop. The
+signatures are stored in the installed package (`abi.json`). Packages that
+were not installed with `abi_install()` have no C function exports.
 
 **Headers:** a hash of all files in the `include` directory, used for
-`linked library` dependencies and as a fallback.
+`linked library` dependencies.
 
 ## Validation
+
+These results were measured with the previous, header-based method, and still
+need to be repeated for signatures that are recorded at build time.
+
 
 - **Rcpp** 1.0.10 to 1.1.2: the headers changed in every release, but the
   signatures of its 36 C functions did not, so none of these releases would
