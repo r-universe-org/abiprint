@@ -23,8 +23,10 @@ c_function_hashes <- function(pkg, path, lib.loc = NULL){
 #' @useDynLib abitools, .registration = TRUE
 registered_callables <- function(pkg, path, lib.loc = NULL){
   libs <- shared_objects(path)
+  if (!length(libs) || !contains_bytes(libs, "R_RegisterCCallable"))
+    return(character())
   words <- header_words(path)
-  if (!length(libs) || !length(words))
+  if (!length(words))
     return(character())
   loaded <- tryCatch(loadNamespace(pkg, lib.loc = lib.loc), error = function(e) NULL)
   if (is.null(loaded))

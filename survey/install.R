@@ -1,0 +1,7 @@
+# Install the selected packages (binaries from the repositories of the image)
+packages <- readLines(commandArgs(TRUE)[1])
+options(Ncpus = parallel::detectCores())
+install.packages(setdiff(c(packages, "jsonlite"), rownames(installed.packages())))
+missing <- setdiff(packages, rownames(installed.packages()))
+if (length(missing))
+  message("Could not install: ", paste(missing, collapse = ", "))
