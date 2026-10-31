@@ -253,7 +253,9 @@ hold copies of classes of another package `P`, e.g. when `D` adds a member to a
 class union of `P`, or extends a class that it does not import with
 `importClassesFrom()`. When `D` is loaded, R replaces the definition of `P` with
 this copy, so `D` also imports `P::<class>` for each copy (the `package` slot
-gives `P`). Classes that were registered with `setOldClass()` (i.e. that extend
+gives `P`), and the superclasses of the copy as above. (A copy can also be a
+class that `D` defines with `setClass(..., package = "P")`, which `P` does not
+have.) Classes that were registered with `setOldClass()` (i.e. that extend
 `oldClass`) are excluded.
 
 **LinkingTo dependencies.** For each package `P` in the `LinkingTo` field of

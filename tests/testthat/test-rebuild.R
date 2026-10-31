@@ -143,3 +143,23 @@ test_that("copies of classes of other packages are imported", {
     expect_equal(abi_deps("conspkg")$detail, "Base_OR_NULL")
   })
 })
+
+test_that("superclasses of classes defined for another package are imported", {
+  skip_on_cran()
+  root <- tempfile()
+  lib <- file.path(root, "lib")
+  dir.create(lib, recursive = TRUE)
+  on.exit(unlink(root, recursive = TRUE))
+
+  install_pkg(make_provider(root, "1.0"), lib)
+  # Like scde, which defines classes with package = "flexmix"
+  install_pkg(make_pkg(root, "conspkg", "1.0",
+                       code = 'setClass("Derived", contains = "Base", package = "provpkg")',
+                       namespace = c("import(methods)", "importClassesFrom(provpkg, Base)"),
+                       imports = "provpkg"), lib)
+  with_lib(lib, {
+    record <- abi_list("conspkg")
+    expect_equal(nrow(record$exports), 0)
+    expect_equal(record$imports$key, "provpkg::Base")
+  })
+})

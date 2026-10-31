@@ -80,7 +80,10 @@ linkingto_type <- function(dep, libs, lib.loc){
 
 s4_deps <- function(db, pkg, lib.loc){
   out <- deps_table()
-  for (def in class_defs(db, pkg)) {
+  copies <- class_defs(db, pkg, copies = TRUE)
+  # Copies include classes that a package defines with the 'package' argument
+  # of setClass() set to another package (scde does this for flexmix)
+  for (def in c(class_defs(db, pkg), copies)) {
     for (ext in def@contains) {
       dep <- super_package(ext)
       if (dep %in% c(pkg, base_packages, "", ".GlobalEnv"))
@@ -89,7 +92,7 @@ s4_deps <- function(db, pkg, lib.loc){
     }
   }
   # When loaded, these copies replace the definitions of the other package
-  for (def in class_defs(db, pkg, copies = TRUE)) {
+  for (def in copies) {
     if (!def@package %in% c(base_packages, "", ".GlobalEnv"))
       out <- rbind(out, s4_dep(def@package, as.character(def@className), lib.loc))
   }
