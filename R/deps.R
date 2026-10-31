@@ -85,12 +85,21 @@ s4_deps <- function(db, pkg, lib.loc){
       dep <- super_package(ext)
       if (dep %in% c(pkg, base_packages, "", ".GlobalEnv"))
         next
-      provider <- provider_class(dep, ext@superClass, lib.loc)
-      if (length(provider) && !"oldClass" %in% names(provider@contains))
-        out <- rbind(out, deps_table(dep, "S4 class", as.character(ext@superClass)))
+      out <- rbind(out, s4_dep(dep, as.character(ext@superClass), lib.loc))
     }
   }
+  # When loaded, these copies replace the definitions of the other package
+  for (def in class_defs(db, pkg, copies = TRUE)) {
+    if (!def@package %in% c(base_packages, "", ".GlobalEnv"))
+      out <- rbind(out, s4_dep(def@package, as.character(def@className), lib.loc))
+  }
   unique(out)
+}
+
+s4_dep <- function(dep, class, lib.loc){
+  provider <- provider_class(dep, class, lib.loc)
+  if (length(provider) && !"oldClass" %in% names(provider@contains))
+    deps_table(dep, "S4 class", class)
 }
 
 provider_class <- function(dep, class, lib.loc){

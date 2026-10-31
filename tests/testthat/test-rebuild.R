@@ -116,3 +116,30 @@ test_that("copies of classes of other packages are not exported", {
     expect_equal(record$imports$key, "provpkg::Base")
   })
 })
+
+test_that("copies of classes of other packages are imported", {
+  skip_on_cran()
+  root <- tempfile()
+  lib <- file.path(root, "lib")
+  dir.create(lib, recursive = TRUE)
+  on.exit(unlink(root, recursive = TRUE))
+
+  install_pkg(make_pkg(root, "provpkg", "1.0",
+                       code = c('setClassUnion("Base_OR_NULL", c("NULL", "logical"))', 'helper <- function(x) x'),
+                       namespace = c("import(methods)", "exportClasses(Base_OR_NULL)", "export(helper)")), lib)
+  # Redefining the union of provpkg (loaded at install time) stores a copy of
+  # it in conspkg, with "character" added as a member
+  install_pkg(make_pkg(root, "conspkg", "1.0",
+                       code = c('setClass("Derived", representation(y = "character"))',
+                                'setClassUnion("Base_OR_NULL", c("NULL", "character"))'),
+                       namespace = c("import(methods)", "importFrom(provpkg, helper)", "exportClasses(Derived)"),
+                       imports = "provpkg"), lib)
+  with_lib(lib, {
+    db <- abitools:::load_rdb(find.package("conspkg"), "conspkg")
+    expect_equal(get(".__C__Base_OR_NULL", envir = db)@package, "provpkg")
+    record <- abi_list("conspkg")
+    expect_equal(record$exports$key, "conspkg::Derived")
+    expect_equal(record$imports, abi_list("provpkg")$exports)
+    expect_equal(abi_deps("conspkg")$detail, "Base_OR_NULL")
+  })
+})

@@ -8,7 +8,9 @@ dependencies in two ways:
 - **Cached S4 classes.** The definition of a class that extends a class from
   another package is stored in the lazy-load database at install time,
   including all inherited slots and superclasses. If the superclass changes,
-  the stored subclass is inconsistent.
+  the stored subclass is inconsistent. The package may also store copies of
+  classes of other packages (e.g. class unions it added members to), which
+  replace the current definitions when it is loaded.
 - **Cross-package C calls.** Packages call C functions of a `LinkingTo`
   dependency through `R_GetCCallable("pkg", "fun")`, compiled against the
   function signatures and struct layouts in its headers (or link to a shared

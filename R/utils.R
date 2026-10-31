@@ -30,12 +30,13 @@ load_rdb <- function(path, pkg){
 }
 
 # The lazyload db also has copies of classes of other packages, e.g. a class
-# union of S4Vectors that a class of the package was added to.
-class_defs <- function(db, pkg){
+# union of S4Vectors that a class of the package was added to. Set
+# copies = TRUE to get those instead of the classes of the package itself.
+class_defs <- function(db, pkg, copies = FALSE){
   names <- grep("^\\.__C__", ls(db, all.names = TRUE), value = TRUE)
   defs <- lapply(names, get, envir = db)
   names(defs) <- sub("^\\.__C__", "", names)
-  Filter(function(def) identical(def@package, pkg), defs)
+  Filter(function(def) identical(def@package, pkg) != copies, defs)
 }
 
 super_package <- function(ext){

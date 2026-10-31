@@ -52,7 +52,8 @@ bytes in lowercase hexadecimal.
 ## 3. S4 classes
 
 A package exports every S4 or reference class that is defined in its
-lazy-load database (the objects named `.__C__<class>`), with the hash
+lazy-load database (the objects named `.__C__<class>`) and whose `package`
+slot is the package itself, with the hash
 
 ```
 hash(<class name>,
@@ -245,11 +246,15 @@ function(UInt64,UInt64,Int32)->*{24,8|0:UInt64;64:UInt64;128:*Int32;}
 The imports of a package `D` are entries copied from the exports of its
 dependencies, as computed when `D` was built (in the same library).
 
-**S4 classes.** For each class in the lazy-load database of `D`, and each of
-its superclasses (including indirect ones) from another package `P` (not `D`
-itself, not a base package), `D` imports `P::<superclass>`. Superclasses that
-were registered with `setOldClass()` (i.e. that extend `oldClass`) are
-excluded.
+**S4 classes.** For each class of `D` itself, and each of its superclasses
+(including indirect ones) from another package `P` (not `D` itself, not a base
+package), `D` imports `P::<superclass>`. The lazy-load database of `D` may also
+hold copies of classes of another package `P`, e.g. when `D` adds a member to a
+class union of `P`, or extends a class that it does not import with
+`importClassesFrom()`. When `D` is loaded, R replaces the definition of `P` with
+this copy, so `D` also imports `P::<class>` for each copy (the `package` slot
+gives `P`). Classes that were registered with `setOldClass()` (i.e. that extend
+`oldClass`) are excluded.
 
 **LinkingTo dependencies.** For each package `P` in the `LinkingTo` field of
 `D`:
