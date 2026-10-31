@@ -80,7 +80,7 @@ linkingto_type <- function(dep, libs, lib.loc){
 
 s4_deps <- function(db, pkg, lib.loc){
   out <- deps_table()
-  for (def in class_defs(db)) {
+  for (def in class_defs(db, pkg)) {
     for (ext in def@contains) {
       dep <- super_package(ext)
       if (dep %in% c(pkg, base_packages, "", ".GlobalEnv"))

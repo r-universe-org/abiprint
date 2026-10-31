@@ -93,3 +93,26 @@ test_that("imports and exports are stored as flat lists in JSON", {
   expect_equal(check$package, c("S4Vectors", "S4Vectors"))
   expect_equal(check$reason, c("C headers removed", "S4 class Vector changed"))
 })
+
+test_that("copies of classes of other packages are not exported", {
+  skip_on_cran()
+  root <- tempfile()
+  lib <- file.path(root, "lib")
+  dir.create(lib, recursive = TRUE)
+  on.exit(unlink(root, recursive = TRUE))
+
+  install_pkg(make_provider(root, "1.0"), lib)
+  # Without importClassesFrom(), R stores a copy of Base in conspkg
+  install_pkg(make_pkg(root, "conspkg", "1.0",
+                       code = 'setClass("Derived", contains = "Base")',
+                       namespace = c("import(methods)", "importFrom(provpkg, helper)",
+                                     "exportClasses(Derived)"),
+                       imports = "provpkg"), lib)
+  with_lib(lib, {
+    db <- abitools:::load_rdb(find.package("conspkg"), "conspkg")
+    expect_true(exists(".__C__Base", envir = db))
+    record <- abi_list("conspkg")
+    expect_equal(record$exports$key, "conspkg::Derived")
+    expect_equal(record$imports$key, "provpkg::Base")
+  })
+})

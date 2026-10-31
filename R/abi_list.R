@@ -42,7 +42,7 @@ abi_list <- function(pkg, lib.loc = NULL){
 
 abi_exports <- function(pkg, lib.loc = NULL){
   path <- find.package(pkg, lib.loc)
-  defs <- class_defs(load_rdb(path, pkg))
+  defs <- class_defs(load_rdb(path, pkg), pkg)
   headers <- header_hash(path)
   functions <- c_function_hashes(pkg, path, lib.loc)
   abi_table(

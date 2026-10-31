@@ -59,7 +59,7 @@ abi_check <- function(x, exports = NULL, lib.loc = NULL){
 stale_classes <- function(pkg, lib.loc = NULL){
   path <- find.package(pkg, lib.loc)
   out <- data.frame(class = character(), package = character(), superclass = character(), reason = character())
-  for (def in class_defs(load_rdb(path, pkg))) {
+  for (def in class_defs(load_rdb(path, pkg), pkg)) {
     for (ext in def@contains) {
       dep <- super_package(ext)
       if (dep %in% c(pkg, base_packages, "", ".GlobalEnv"))
